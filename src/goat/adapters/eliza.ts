@@ -92,19 +92,23 @@ function createAction(tool: ToolBase): Action {
 function composeParameterContext(tool: ToolBase, state: State): string {
   const contextTemplate = `{{recentMessages}}
 
-Given the recent messages, extract the following information for the action "${tool.name}":
+Given the recent messages, extract the following information for the action "${tool.name}"
+
+Make sure to remove \`\`\`json and \`\`\` from the response
+
 ${addParametersToDescription("", tool.parameters)}
 `;
+console.log(contextTemplate)
   return composeContext({ state, template: contextTemplate });
 }
 
 async function generateParameters(runtime: IAgentRuntime, context: string, tool: ToolBase): Promise<unknown> {
   const { object } = await generateObject({
-      runtime,
-      context,
-      modelClass: ModelClass.LARGE,
-      // @ts-ignore
-      schema: tool.parameters,
+    runtime,
+    context,
+    modelClass: ModelClass.LARGE,
+    // @ts-ignore
+    schema: tool.parameters,
   });
 
   return object;

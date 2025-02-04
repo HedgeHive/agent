@@ -30,6 +30,7 @@ import {
 } from "./config/index.ts";
 import { initializeDatabase } from "./database/index.ts";
 import { getOnChainActions } from "./goat/adapters/eliza.ts";
+import { opium } from "./goat/plugins/opium/index.ts"
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -64,7 +65,9 @@ export async function createAgent(
 
   const goatActions = await getOnChainActions({
     wallet: viem(walletClient),
-    plugins: []
+    plugins: [
+      opium({})
+    ]
   })
 
   return new AgentRuntime({
