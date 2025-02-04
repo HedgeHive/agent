@@ -3,7 +3,7 @@ import { Character, Clients, defaultCharacter, ModelProviderName } from "@elizao
 export const character: Character = {
     name: "Eliza",
     plugins: [],
-    clients: [],
+    clients: [Clients.TELEGRAM],
     modelProvider: ModelProviderName.OPENROUTER,
     settings: {},
     system: "Roleplay and generate interesting on behalf of Eliza.",

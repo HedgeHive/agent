@@ -13,6 +13,12 @@ import net from "net";
 import path from "path";
 import { fileURLToPath } from "url";
 
+import { viem } from "@goat-sdk/wallet-viem";
+
+import { createWalletClient, http } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+import { arbitrum } from "viem/chains";
+
 import { initializeDbCache } from "./cache/index.ts";
 import { character } from "./character.ts";
 import { startChat } from "./chat/index.ts";
@@ -23,6 +29,7 @@ import {
   parseArguments,
 } from "./config/index.ts";
 import { initializeDatabase } from "./database/index.ts";
+import { getOnChainActions } from "./goat/adapters/eliza.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,7 +40,7 @@ export const wait = (minTime: number = 1000, maxTime: number = 3000) => {
   return new Promise((resolve) => setTimeout(resolve, waitTime));
 };
 
-export function createAgent(
+export async function createAgent(
   character: Character,
   db: any,
   cache: any,
@@ -45,6 +52,21 @@ export function createAgent(
     character.name,
   );
 
+  const account = privateKeyToAccount(
+    process.env.WALLET_PRIVATE_KEY as `0x${string}`
+  );
+  
+  const walletClient = createWalletClient({
+    account: account,
+    transport: http(process.env.RPC_URL),
+    chain: arbitrum,
+  });
+
+  const goatActions = await getOnChainActions({
+    wallet: viem(walletClient),
+    plugins: []
+  })
+
   return new AgentRuntime({
     databaseAdapter: db,
     token,
@@ -55,7 +77,9 @@ export function createAgent(
       bootstrapPlugin,
     ].filter(Boolean),
     providers: [],
-    actions: [],
+    actions: [
+      ...goatActions,
+    ],
     services: [],
     managers: [],
     cacheManager: cache,
@@ -79,7 +103,7 @@ async function startAgent(character: Character, directClient: DirectClient) {
     await db.init();
 
     const cache = initializeDbCache(character, db);
-    const runtime = createAgent(character, db, cache, token);
+    const runtime = await createAgent(character, db, cache, token);
 
     await runtime.initialize();
 
