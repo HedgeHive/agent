@@ -98,7 +98,6 @@ Make sure to remove \`\`\`json and \`\`\` from the response
 
 ${addParametersToDescription("", tool.parameters)}
 `;
-console.log(contextTemplate)
   return composeContext({ state, template: contextTemplate });
 }
 

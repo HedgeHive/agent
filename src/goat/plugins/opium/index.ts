@@ -130,7 +130,7 @@ export class OpiumPlugin extends PluginBase {
 
                     if (!matchingOrder) {
                         const order: Order = {
-                            makerAsset: isBuy ? shortPositionAddress : longPositionAddress,
+                            makerAsset: derivative.token,
                             takerAsset: isBuy ? longPositionAddress : shortPositionAddress
                         }
                         const orderHash = hashOrder(order)
