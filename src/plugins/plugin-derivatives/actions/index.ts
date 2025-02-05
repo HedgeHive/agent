@@ -26,16 +26,16 @@ export const GetAvailableOptions = createAction(createTool(
 
     const deribit = getDeribitSingleton();
     const instruments = await deribit.getInstruments(underlyingAsset as DeribitCurrency, 'option', false);
-    return instruments.map(i => i.instrument_name && i.is_active);
+    return instruments.filter(i => i.is_active).map(i => i.instrument_name);
   }
 ))
 
 export const GetOptionPriceAction = createAction(createTool(
   {
     name: "get_option_price",
-    description: "Get the market price of the given option instrument <ASSET>-<DDMMMYY>-<STRIKE>-<C|P>",
+    description: "Get the market price of the given option instrument <ASSET>-<DMMMYY>-<STRIKE>-<C|P>",
     parameters: z.object({
-      instrumentName: z.string({ description: "Instrument name in format <ASSET>-<DDMMMYY>-<STRIKE>-<C|P>" }),
+      instrumentName: z.string({ description: "Instrument name in format <ASSET>-<DMMMYY>-<STRIKE>-<C|P>" }),
     }),
   },
   async (parameters) => {
@@ -46,6 +46,7 @@ export const GetOptionPriceAction = createAction(createTool(
 
     const deribit = getDeribitSingleton();
     const instrumentSummary = await deribit.getBookSummaryByInstrument(instrumentName)
+    elizaLogger.info({ instrumentSummary })
     return instrumentSummary.mark_price
   }
 ))

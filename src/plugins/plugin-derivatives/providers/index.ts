@@ -15,8 +15,8 @@ export const AvailableUnderlyingAssetsProvider: Provider = {
 export const IndexPricesProvider: Provider = {
   get: async (_runtime: IAgentRuntime, _message: Memory, _state?: State) => {
     const deribit = getDeribitSingleton()
-    const indexPrice = await deribit.getIndexPrice('eth_usd')
+    const indexResult = await deribit.getIndexPrice('eth_usd')
     return `Current index prices:
-\t- ETH/USD: ${indexPrice}`
+\t- ETH/USD: ${indexResult.index_price}`
   }
 }

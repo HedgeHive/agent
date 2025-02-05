@@ -199,7 +199,7 @@ export class DeribitApiService {
     try {
       const params = addParamsToQuery({ instrument_name })
       const response = await this._client.get(`/public/get_book_summary_by_instrument?${params}`)
-      return response.data.result
+      return response.data.result[0]
     } catch (e) {
       throw this._handleApiError(e)
     }
@@ -236,7 +236,7 @@ export class DeribitApiService {
   public async getIndexPrice(indexName: DeribitIndexName): Promise<DeribitIndexResult> {
     try {
       const response = await this._client.get(`/public/get_index_price?index_name=${indexName}`)
-      return response.data.result.index_price
+      return response.data.result
     } catch (e) {
       throw this._handleApiError(e)
     }

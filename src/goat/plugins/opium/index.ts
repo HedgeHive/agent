@@ -35,7 +35,7 @@ const parseDerivative = (instrumentName: string): Derivative => {
     assert(TYPE === "C" || TYPE === "P", "Invalid option type");
 
     const margin = BigInt(1e18);
-    const endTime = moment(MATURITY, "DDMMMYY").unix()
+    const endTime = moment(MATURITY, "DMMMYY").unix()
     const strikePrice = BigInt(STRIKE_PRICE) * BigInt(1e18)
     const oracleId = ORACLE_ADDRESS_BY_ASSET[UNDERLYING_ASSET]
     const token = UNDERLYING_ADDRESS_BY_ASSET[UNDERLYING_ASSET]
@@ -107,7 +107,7 @@ export class OpiumPlugin extends PluginBase {
                     name: "place_order",
                     description: "Place and order to the orderbook with provided instrument name, quantity, side (buy / sell) and price",
                     parameters: z.object({
-                        instrumentName: z.string({ description: "Instrument name in format <ASSET>-<DDMMMYY>-<STRIKE>-<C|P>" }),
+                        instrumentName: z.string({ description: "Instrument name in format <ASSET>-<DMMMYY>-<STRIKE>-<C|P>" }),
                         quantity: z.number(),
                         side: z.string({ description: "BUY or SELL"}),
                         price: z.number()
