@@ -1,4 +1,17 @@
-# Eliza
+# HedgeHive agent
+
+HedgeHive is a customizable trading agent for decentralized derivatives, structured products, and spot markets. It enables a censorship-resistant, P2P order-sharing network, where agents connect into a distributed swarm/hive to share and match orders.
+
+Key Features
+	•	P2P Order Mesh – Fully distributed order book
+	•	DEX Settlement – Supports Opium & 1inch Limit Order Protocol
+	•	Chat Assistant – Telegram integration for market insights & execution
+	•	Trading Signals – Automates trades based on TradingView signals
+	•	Autonomous Trading (Phase 2) – AI-driven strategy execution & monitoring
+	•	Strategy Planner – Quantitative analysis based on risk profile
+	•	(Optional) CEX Settlement – Integration with Deribit
+
+Future Tracks: Autonomous execution, on-chain computations (AUM, fair pricing), and more.
 
 ## Edit the character files
 
