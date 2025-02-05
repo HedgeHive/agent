@@ -29,6 +29,7 @@ import {
   parseArguments,
 } from "./config/index.ts";
 import { initializeDatabase } from "./database/index.ts";
+import { derivativesPlugin } from './plugins/plugin-derivatives/index.ts'
 import { getOnChainActions } from "./goat/adapters/eliza.ts";
 import { opium } from "./goat/plugins/opium/index.ts"
 
@@ -78,6 +79,7 @@ export async function createAgent(
     character,
     plugins: [
       bootstrapPlugin,
+      derivativesPlugin,
     ].filter(Boolean),
     providers: [],
     actions: [

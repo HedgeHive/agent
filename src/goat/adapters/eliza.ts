@@ -41,7 +41,7 @@ export async function getOnChainActions<TWalletClient extends WalletClientBase>(
   return tools.map((tool) => createAction(tool));
 }
 
-function createAction(tool: ToolBase): Action {
+export function createAction(tool: ToolBase): Action {
   return {
       name: tool.name.toUpperCase(),
       similes: [],
@@ -92,7 +92,7 @@ function createAction(tool: ToolBase): Action {
 function composeParameterContext(tool: ToolBase, state: State): string {
   const contextTemplate = `{{recentMessages}}
 
-Given the recent messages, extract the following information for the action "${tool.name}"
+Given the recent messages, extract the following information for the action "${tool.name}" (${tool.description})
 
 Make sure to remove \`\`\`json and \`\`\` from the response
 

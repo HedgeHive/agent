@@ -20,6 +20,7 @@
     "@goat-sdk/core": "^0.4.6",
     "@goat-sdk/wallet-viem": "^0.2.7",
     "amqplib": "0.10.5",
+    "axios": "^1.7.9",
     "better-sqlite3": "11.5.0",
     "fs": "0.0.1-security",
     "moment": "^2.30.1",
