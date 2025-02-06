@@ -2,8 +2,9 @@ import { arbitrum } from "viem/chains";
 import assert from "assert";
 import moment from "moment";
 import { keccak256 } from "viem";
+import { AmountMode } from "@1inch/limit-order-sdk";
 
-import { Derivative, OrderParams, PositionType } from "./types.ts";
+import { Derivative, FillParams, OrderParams, PositionType } from "./types.ts";
 
 const SUPPORTED_CHAINS = [arbitrum];
 const SUPPORTED_ASSETS = ['ETH']
@@ -30,6 +31,13 @@ export const getOrderParams = (derivative: Derivative, longPositionAddress: stri
     takerAsset: isBuy ? longPositionAddress : shortPositionAddress,
     makingAmount: 1n,
     takingAmount: 1n
+  }
+}
+
+export const getFillParams = (): FillParams => {
+  return {
+    amountMode: AmountMode.maker,
+    amount: 1n
   }
 }
 

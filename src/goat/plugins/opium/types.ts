@@ -1,4 +1,4 @@
-import { LimitOrderV4Struct } from "@1inch/limit-order-sdk";
+import { AmountMode, LimitOrderV4Struct } from "@1inch/limit-order-sdk";
 
 export type Derivative = {
   margin: BigInt;
@@ -26,4 +26,9 @@ export type SignedOrder = {
   orderStruct: LimitOrderV4Struct
   orderHash: string
   signature: string
+}
+
+export type FillParams = {
+  amountMode: AmountMode
+  amount: bigint
 }

@@ -3,11 +3,11 @@ import { Derivative, SignedOrder } from "./types.ts"
 
 const orderbook: Array<SignedOrder> = []
 
-export const placeOrder = (order: SignedOrder) => {
+export const addOrder = (order: SignedOrder) => {
   orderbook.push(order)
 }
 
-export const takerOrder = (orderHash: string) => {
+export const removeOrder = (orderHash: string) => {
   const index = orderbook.findIndex(order => order.orderHash === orderHash)
   if (index !== -1) {
     orderbook.splice(index, 1)

@@ -1,7 +1,9 @@
 import { EVMWalletClient } from "@goat-sdk/wallet-evm"
-import { Address, LimitOrder, MakerTraits } from "@1inch/limit-order-sdk"
+import { Address, LimitOrder, LimitOrderContract, MakerTraits, TakerTraits } from "@1inch/limit-order-sdk"
 
-import { OrderParams, SignedOrder } from "./types"
+import { FillParams, OrderParams, SignedOrder } from "./types"
+
+const LOP_ADDRESS = '0x111111125421cA6dc452d289314280a0f8842A65'
 
 export const createOrder = async (
   wallet: EVMWalletClient,
@@ -35,4 +37,20 @@ export const createOrder = async (
     orderHash,
     signature: signature.signature
   }
+}
+
+export const fillOrder = async (
+  wallet: EVMWalletClient,
+  order: SignedOrder,
+  fillParams: FillParams
+) => {
+  const takerTraits = TakerTraits.default().setAmountMode(fillParams.amountMode)
+  const calldata = LimitOrderContract.getFillOrderCalldata(order.orderStruct, order.signature, takerTraits, fillParams.amount)
+
+  const tx = await wallet.sendTransaction({
+    to: LOP_ADDRESS,
+    data: calldata as `0x${string}`,
+  })
+
+  return tx
 }
