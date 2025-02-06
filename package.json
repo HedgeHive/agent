@@ -5,12 +5,13 @@
   "type": "module",
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts",
-    "start": "tsc && node --loader ts-node/esm src/index.ts",
+    "start": "tsx src/index.ts",
     "clean": "./scripts/clean.sh",
     "start:service:all": "pm2 start pnpm --name=\"all\" --restart-delay=3000 --max-restarts=10 -- run start:all",
     "stop:service:all": "pm2 stop all"
   },
   "dependencies": {
+    "@1inch/limit-order-sdk": "^4.11.6",
     "@elizaos/adapter-postgres": "^0.1.9",
     "@elizaos/adapter-sqlite": "0.1.9",
     "@elizaos/client-direct": "0.1.9",
@@ -18,6 +19,7 @@
     "@elizaos/core": "0.1.9",
     "@elizaos/plugin-bootstrap": "0.1.9",
     "@goat-sdk/core": "^0.4.6",
+    "@goat-sdk/wallet-evm": "^0.2.8",
     "@goat-sdk/wallet-viem": "^0.2.7",
     "amqplib": "0.10.5",
     "axios": "^1.7.9",
@@ -48,6 +50,7 @@
     "pm2": "5.4.3",
     "ts-node": "10.9.2",
     "tsup": "8.3.5",
+    "tsx": "^4.19.2",
     "typescript": "5.6.3"
   }
 }

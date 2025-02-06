@@ -140,7 +140,11 @@ ${JSON.stringify(result)}
 
 {{actions}}
 
-Respond to the message knowing that the action was successful and these were the previous messages:
+Respond to the message knowing that the action was successful
+
+Make sure to omit action name and parameters from the response
+
+These were the previous messages:
 {{recentMessages}}
 `;
   return composeContext({ state, template: responseTemplate });

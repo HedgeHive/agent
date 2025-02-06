@@ -30,7 +30,7 @@ const assertAndParseInstrumentName = (instrumentName: string) => {
 export const CheckIfOptionIsAvailable = createAction(createTool(
   {
     name: "check_if_option_is_available",
-    description: "Checks the availability of the option with the given instrument <ASSET>-<DMMMYY>-<STRIKE>-<C|P>",
+    description: "Checks the availability of the option for a given instrument <ASSET>-<DMMMYY>-<STRIKE>-<C|P>. It's useful to check option availability before doing anything with it",
     parameters: z.object({
       instrumentName: z.string({ description: "Instrument name in format <ASSET>-<DMMMYY>-<STRIKE>-<C|P>" }),
       underlyingAsset: z.string({ description: "Underlying asset ('BTC' | 'ETH' | 'USDC' | 'USDT' | 'EURR' | 'any')" }),
