@@ -1,9 +1,9 @@
 import { AmountMode, LimitOrderV4Struct } from "@1inch/limit-order-sdk";
 
 export type Derivative = {
-  margin: BigInt;
+  margin: bigint;
   endTime: number;
-  params: BigInt[];
+  params: bigint[];
   oracleId: string;
   token: string;
   syntheticId: string;
