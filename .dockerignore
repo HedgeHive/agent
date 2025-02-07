@@ -1,2 +1,4 @@
+.git
 .env
 .tee-cloud
+node_modules

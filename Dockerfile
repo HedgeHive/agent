@@ -1,15 +1,17 @@
-# Use a specific Node.js version for better reproducibility
-FROM node:23.3.0-slim AS builder
+# --- BUILD STAGE ---
+FROM node:22-slim AS builder
 
-# Install pnpm globally and install necessary build tools
-RUN npm install -g pnpm@9.15.1 && \
-    apt-get update && \
-    apt-get install -y git python3 make g++ && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+# Install pnpm globally
+RUN npm install -g pnpm
 
-# Set Python 3 as the default python
-RUN ln -s /usr/bin/python3 /usr/bin/python
+# Install necessary build tools
+RUN apt-get update && apt-get install -y python3 make g++ curl
+
+# Install Rust
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+
+# Add cargo to PATH
+ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Set the working directory
 WORKDIR /app
@@ -21,41 +23,33 @@ COPY tsconfig.json ./
 
 # Copy the rest of the application code
 COPY ./src ./src
-COPY ./characters ./characters
 
-# Install dependencies and build the project
-RUN pnpm install 
-RUN pnpm build 
+# Install dependencies
+RUN pnpm install
 
-# Create dist directory and set permissions
-RUN mkdir -p /app/dist && \
-    chown -R node:node /app && \
-    chmod -R 755 /app
+ENV RUSTFLAGS="-C target-feature=-crt-static"
 
-# Switch to node user
-USER node
+# Build the tokenizers library
+RUN cd /app/node_modules/.pnpm/@anush008+tokenizers@0.0.0/node_modules/@anush008/tokenizers/ && cargo build --release
 
-# Create a new stage for the final image
-FROM node:23.3.0-slim
+#  Copy the built .so to the correct location.  Using a more robust approach:
+RUN mkdir -p /app/dist
+RUN cp /app/node_modules/.pnpm/@anush008+tokenizers@0.0.0/node_modules/@anush008/tokenizers/target/release/libanush008_tokenizers.so /app/dist/tokenizers.linux-arm64-gnu.node
 
-# Install runtime dependencies if needed
-RUN npm install -g pnpm@9.15.1
-RUN apt-get update && \
-    apt-get install -y git python3 && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+
+# --- RUNTIME STAGE ---
+FROM node:22-slim
+
+# Install pnpm globally
+RUN npm install -g pnpm
 
 WORKDIR /app
 
-# Copy built artifacts and production dependencies from the builder stage
-COPY --from=builder /app/package.json /app/
-COPY --from=builder /app/node_modules /app/node_modules
-COPY --from=builder /app/src /app/src
-COPY --from=builder /app/characters /app/characters
-COPY --from=builder /app/dist /app/dist
-COPY --from=builder /app/tsconfig.json /app/
-COPY --from=builder /app/pnpm-lock.yaml /app/
+# Copy only the necessary files from the builder stage
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile  # Install only production dependencies
 
-EXPOSE 3000
-# Set the command to run the application
-CMD ["pnpm", "start", "--non-interactive"]
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/dist/tokenizers.linux-arm64-gnu.node ./node_modules/.pnpm/@anush008+tokenizers@0.0.0/node_modules/@anush008/tokenizers/tokenizers.linux-arm64-gnu.node
+CMD ["pnpm", "start"]
