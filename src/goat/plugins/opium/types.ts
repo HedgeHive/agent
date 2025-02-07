@@ -1,4 +1,4 @@
-import { AmountMode, LimitOrderV4Struct } from "@1inch/limit-order-sdk";
+import { LimitOrderV4Struct, TakerTraits } from "@1inch/limit-order-sdk";
 
 export type Derivative = {
   margin: bigint;
@@ -12,6 +12,12 @@ export type Derivative = {
 export enum PositionType {
   LONG,
   SHORT
+}
+
+export type Quote = {
+  quantity: number
+  price: number
+  isBuy: boolean
 }
 
 export type OrderParams = {
@@ -29,6 +35,7 @@ export type SignedOrder = {
 }
 
 export type FillParams = {
-  amountMode: AmountMode
+  signedOrder: SignedOrder
+  takerTraits: TakerTraits
   amount: bigint
 }

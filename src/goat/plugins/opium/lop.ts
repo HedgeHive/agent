@@ -41,11 +41,9 @@ export const createOrder = async (
 
 export const fillOrder = async (
   wallet: EVMWalletClient,
-  order: SignedOrder,
   fillParams: FillParams
 ) => {
-  const takerTraits = TakerTraits.default().setAmountMode(fillParams.amountMode)
-  const calldata = LimitOrderContract.getFillOrderCalldata(order.orderStruct, order.signature, takerTraits, fillParams.amount)
+  const calldata = LimitOrderContract.getFillOrderCalldata(fillParams.signedOrder.orderStruct, fillParams.signedOrder.signature, fillParams.takerTraits, fillParams.amount)
 
   const tx = await wallet.sendTransaction({
     to: LOP_ADDRESS,

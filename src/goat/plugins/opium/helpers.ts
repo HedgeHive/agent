@@ -1,10 +1,10 @@
 import { arbitrum } from "viem/chains";
 import assert from "assert";
 import moment from "moment";
-import { keccak256, getCreate2Address, encodePacked } from "viem";
-import { AmountMode } from "@1inch/limit-order-sdk";
+import { keccak256, getCreate2Address, encodePacked, parseUnits } from "viem";
 
-import { Derivative, FillParams, OrderParams, PositionType } from "./types.ts";
+import { Derivative, OrderParams, PositionType, Quote } from "./types.ts";
+import { elizaLogger } from "@elizaos/core";
 
 const SUPPORTED_CHAINS = [arbitrum];
 const SUPPORTED_ASSETS = ['ETH']
@@ -13,6 +13,9 @@ const OPIUM_POSITION_IMPLEMENTATION_ADDRESS = '0x6384F8070fda183e2b8CE0d521C0a9E
 const OPIUM_POSITION_FACTORY_ADDRESS = '0x328bC74ccA6578349B262D21563d5581DAA43a16'
 const UNDERLYING_ADDRESS_BY_ASSET = {
   'ETH': '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1',
+}
+export const TOKEN_DECIMALS = {
+  '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1': 18
 }
 const ORACLE_ADDRESS_BY_ASSET = {
   'ETH': '0xAF5F031b8D5F12AD80d5E5f13C99249d82AfFfe2',
@@ -26,21 +29,33 @@ export const isChainIdSupported = (chainId: number): boolean => {
   return SUPPORTED_CHAINS.some(chain => chain.id === chainId);
 }
 
-export const getOrderParams = (derivative: Derivative, longPositionAddress: string, shortPositionAddress: string, isBuy: boolean): OrderParams => {
-  // TODO: Check if users has opposite position and if so, liquidate it, otherwise get a new one
+export const getOrderParams = (derivative: Derivative, longPositionAddress: string, shortPositionAddress: string, quote: Quote): OrderParams => {
+  // TODO: [LATER] Check if users has opposite position and if so, liquidate it, otherwise get a new one
+
+  const {
+    margin: nominal,
+    params: [, collateralization]
+  } = derivative
+  const initialMargin = nominal * collateralization / BigInt(1e18)
+
+  const decimals = TOKEN_DECIMALS[derivative.token]
+  assert(decimals !== undefined, "Unsupported asset")
+  
+  const quantity = parseUnits(quote.quantity.toFixed(18), 18)
+  const price = parseUnits(quote.price.toFixed(decimals), decimals)
+
+  const totalMargin = initialMargin * quantity / BigInt(1e18)
+  const totalPremium = price * quantity / BigInt(1e18)
+
+  const totalToPay = quote.isBuy ? totalPremium : totalMargin - totalPremium
+
+  elizaLogger.info({ initialMargin, decimals, quantity, price, totalMargin, totalPremium, totalToPay })
 
   return {
     makerAsset: derivative.token,
-    takerAsset: isBuy ? longPositionAddress : shortPositionAddress,
-    makingAmount: 1n,
-    takingAmount: 1n
-  }
-}
-
-export const getFillParams = (): FillParams => {
-  return {
-    amountMode: AmountMode.maker,
-    amount: 1n
+    takerAsset: quote.isBuy ? longPositionAddress : shortPositionAddress,
+    makingAmount: totalToPay,
+    takingAmount: quantity
   }
 }
 
@@ -56,7 +71,7 @@ export const parseDerivative = (instrumentName: string): Derivative => {
   assert(SUPPORTED_ASSETS.includes(UNDERLYING_ASSET), "Unsupported asset");
   assert(TYPE === "C" || TYPE === "P", "Invalid option type");
 
-  const margin = BigInt(1e18);
+  const nominal = BigInt(1e18);
   const endTime = moment.utc(MATURITY, "DMMMYY").hour(8).minute(0).second(0).unix()
   const strikePrice = BigInt(STRIKE_PRICE) * BigInt(1e18)
   const collateralization = BigInt(1e18) * COLLATERALIZATION_PERCENT / 100n
@@ -66,7 +81,7 @@ export const parseDerivative = (instrumentName: string): Derivative => {
   const syntheticId = SYNTHETIC_ADDRESS_BY_TYPE[TYPE]
 
   return {
-    margin,
+    margin: nominal,
     endTime: endTime,
     params: [strikePrice, collateralization, fixedPremium],
     oracleId,
