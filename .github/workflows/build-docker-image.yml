@@ -34,12 +34,12 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:latest
-            ghcr.io/${{ github.repository }}:${{ github.sha }}
+            ghcr.io/hedgehive/agent:latest
+            ghcr.io/hedgehive/agent:${{ github.sha }}
           labels: |
             org.opencontainers.image.created=${{ github.event.push.timestamp }}
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.source=https://github.com/hedgehive/agent
             org.opencontainers.image.title=${{ github.event.repository.name }}
 
       - name: Image digest
