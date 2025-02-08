@@ -88,7 +88,7 @@ const findMatchingOrder = (leftOrder: SignedOrder): SignedOrder | undefined => {
   })
 }
 
-const runArbitrage = async (walletClient: EVMWalletClient) => {
+export const runArbitrage = async (walletClient: EVMWalletClient) => {
   for (const signedOrder of orderbook) {
     const matchingOrder = findMatchingOrder(signedOrder)
     if (!matchingOrder) { continue }

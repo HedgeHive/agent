@@ -6,7 +6,7 @@ import { elizaLogger } from "@elizaos/core";
 
 import { createOrder } from "./lop.ts";
 import { performBalanceAndAllowanceChecks, getOrderParams, getPositionAddress, isChainIdSupported, parseDerivative } from "./helpers.ts";
-import { addOrder } from "./orderbook.ts";
+import { addOrder, runArbitrage } from "./orderbook.ts";
 import { PositionType, Quote } from "./types.ts";
 
 export type OpiumPluginParams = {}
@@ -19,6 +19,16 @@ export class OpiumPlugin extends PluginBase {
 
     getTools(walletClient: EVMWalletClient) {
         return [
+            createTool(
+                {
+                    name: "debug_call",
+                    description: "Call this action if asked",
+                    parameters: z.object({})
+                },
+                async () => {
+                    await runArbitrage(walletClient)
+                }
+            ),
             createTool(
                 {
                     name: "place_order",
