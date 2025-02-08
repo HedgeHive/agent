@@ -2,9 +2,12 @@ import { arbitrum } from "viem/chains";
 import assert from "assert";
 import moment from "moment";
 import { keccak256, getCreate2Address, encodePacked, parseUnits } from "viem";
+import { elizaLogger } from "@elizaos/core";
+import { EVMWalletClient } from "@goat-sdk/wallet-evm";
 
 import { Derivative, OrderParams, PositionType, Quote } from "./types.ts";
-import { elizaLogger } from "@elizaos/core";
+import { ERC20_ABI, FAUCET_ABI } from "./abi.ts";
+import { LOP_ADDRESS } from "./lop.ts";
 
 const SUPPORTED_CHAINS = [arbitrum];
 const SUPPORTED_ASSETS = ['ETH']
@@ -12,10 +15,13 @@ const COLLATERALIZATION_PERCENT = 100n
 const OPIUM_POSITION_IMPLEMENTATION_ADDRESS = '0x6384F8070fda183e2b8CE0d521C0a9E7606e30EA'
 const OPIUM_POSITION_FACTORY_ADDRESS = '0x328bC74ccA6578349B262D21563d5581DAA43a16'
 const UNDERLYING_ADDRESS_BY_ASSET = {
-  'ETH': '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1',
+  'ETH': '0xaab14767959b8b3a3710eee8f4124aad22faceaf', // Mock WETH
 }
 export const TOKEN_DECIMALS = {
-  '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1': 18
+  '0xaab14767959b8b3a3710eee8f4124aad22faceaf': 18
+}
+const TOKEN_FAUCET_ADDRESS = {
+  '0xaab14767959b8b3a3710eee8f4124aad22faceaf': '0xe848bb034CC9CBBe610Ed484F5b2593444df111e'
 }
 const ORACLE_ADDRESS_BY_ASSET = {
   'ETH': '0xAF5F031b8D5F12AD80d5E5f13C99249d82AfFfe2',
@@ -29,28 +35,80 @@ export const isChainIdSupported = (chainId: number): boolean => {
   return SUPPORTED_CHAINS.some(chain => chain.id === chainId);
 }
 
-export const getOrderParams = (derivative: Derivative, longPositionAddress: string, shortPositionAddress: string, quote: Quote): OrderParams => {
-  // TODO: [LATER] Check if users has opposite position and if so, liquidate it, otherwise get a new one
-
+export const getInitialMargin = (derivative: Derivative) => {
   const {
     margin: nominal,
     params: [, collateralization]
   } = derivative
-  const initialMargin = nominal * collateralization / BigInt(1e18)
+  return {
+    longMargin: 0n,
+    shortMargin: nominal * collateralization / BigInt(1e18),
+  }
+}
 
+const getTotalToPay = (derivative: Derivative, quote: Quote) => {
   const decimals = TOKEN_DECIMALS[derivative.token]
   assert(decimals !== undefined, "Unsupported asset")
-  
+
+  const { shortMargin } = getInitialMargin(derivative)
+
   const quantity = parseUnits(quote.quantity.toFixed(18), 18)
   const price = parseUnits(quote.price.toFixed(decimals), decimals)
 
-  const totalMargin = initialMargin * quantity / BigInt(1e18)
+  const totalMargin = shortMargin * quantity / BigInt(1e18)
   const totalPremium = price * quantity / BigInt(1e18)
 
-  const totalToPay = quote.isBuy ? totalPremium : totalMargin - totalPremium
+  return quote.isBuy ? totalPremium : totalMargin - totalPremium
+}
 
-  elizaLogger.info({ initialMargin, decimals, quantity, price, totalMargin, totalPremium, totalToPay })
+export const performBalanceAndAllowanceChecks = async (walletClient: EVMWalletClient, derivative: Derivative, quote: Quote) => {
+  const decimals = TOKEN_DECIMALS[derivative.token]
+  assert(decimals !== undefined, "Unsupported asset")
 
+  const totalToPay = getTotalToPay(derivative, quote)
+
+  const [rawBalance, rawAllowance] = await Promise.all([
+    walletClient.read({
+      address: derivative.token,
+      abi: ERC20_ABI,
+      functionName: "balanceOf",
+      args: [walletClient.getAddress()],
+    }),
+    walletClient.read({
+      address: derivative.token,
+      abi: ERC20_ABI,
+      functionName: "allowance",
+      args: [walletClient.getAddress(), LOP_ADDRESS]
+    })
+  ])
+
+  const balance = rawBalance.value as bigint
+  const allowance = rawAllowance.value as bigint
+
+  if (balance < totalToPay) {
+    await walletClient.sendTransaction({
+      to: TOKEN_FAUCET_ADDRESS[derivative.token],
+      abi: FAUCET_ABI,
+      functionName: "claim",
+      args: []
+    })
+  }
+
+  if (allowance < totalToPay) {
+    await walletClient.sendTransaction({
+      to: derivative.token,
+      abi: ERC20_ABI,
+      functionName: "approve",
+      args: [LOP_ADDRESS, totalToPay]
+    })
+  }
+}
+
+export const getOrderParams = (derivative: Derivative, longPositionAddress: string, shortPositionAddress: string, quote: Quote): OrderParams => {
+  // TODO: [LATER] Check if users has opposite position and if so, liquidate it, otherwise get a new one
+
+  const quantity = parseUnits(quote.quantity.toFixed(18), 18)
+  const totalToPay = getTotalToPay(derivative, quote)
   return {
     makerAsset: derivative.token,
     takerAsset: quote.isBuy ? longPositionAddress : shortPositionAddress,

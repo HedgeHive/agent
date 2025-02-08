@@ -3,7 +3,7 @@ import { Address, LimitOrder, LimitOrderContract, MakerTraits } from "@1inch/lim
 
 import { Derivative, FillParams, OrderParams, SignedOrder } from "./types"
 
-const LOP_ADDRESS = '0x111111125421cA6dc452d289314280a0f8842A65'
+export const LOP_ADDRESS = '0x111111125421cA6dc452d289314280a0f8842A65'
 
 export const createOrder = async (
   wallet: EVMWalletClient,

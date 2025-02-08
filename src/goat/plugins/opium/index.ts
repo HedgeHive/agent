@@ -4,9 +4,9 @@ import { z } from "zod";
 import assert from 'assert'
 import { elizaLogger } from "@elizaos/core";
 
-import { createOrder, fillOrder } from "./lop.ts";
-import { getOrderParams, getPositionAddress, isChainIdSupported, parseDerivative } from "./helpers.ts";
-import { addOrder, findMatchingOrder, removeOrder } from "./orderbook.ts";
+import { createOrder } from "./lop.ts";
+import { performBalanceAndAllowanceChecks, getOrderParams, getPositionAddress, isChainIdSupported, parseDerivative } from "./helpers.ts";
+import { addOrder } from "./orderbook.ts";
 import { PositionType, Quote } from "./types.ts";
 
 export type OpiumPluginParams = {}
@@ -49,25 +49,17 @@ export class OpiumPlugin extends PluginBase {
                         isBuy: parameters.side === "BUY"
                     }
 
-                    const matchingFillParams = findMatchingOrder(derivative, longPositionAddress, shortPositionAddress, quote);
+                    await performBalanceAndAllowanceChecks(walletClient, derivative, quote)
 
-                    if (!matchingFillParams) {
-                        const orderParams = getOrderParams(derivative, longPositionAddress, shortPositionAddress, quote)
-                        elizaLogger.info({ orderParams })
-                        const signedOrder = await createOrder(walletClient, orderParams, derivative, longPositionAddress, shortPositionAddress)
-                        addOrder(signedOrder)
-                        return {
-                            text: `No matching orders were found. New order was placed instead, orderHash=${signedOrder.orderHash}`,
-                            data: {
-                                orderHash: signedOrder.orderHash,
-                            }
-                        };
-                    }
-
-                    await fillOrder(walletClient, matchingFillParams)
-                    removeOrder(matchingFillParams.signedOrder.orderHash)
+                    const orderParams = getOrderParams(derivative, longPositionAddress, shortPositionAddress, quote)
+                    elizaLogger.info({ orderParams })
+                    const signedOrder = await createOrder(walletClient, orderParams, derivative, longPositionAddress, shortPositionAddress)
+                    addOrder(signedOrder)
                     return {
-                        text: `Matching order was found and filled successfully`
+                        text: `Order was placed, orderHash=${signedOrder.orderHash}`,
+                        data: {
+                            orderHash: signedOrder.orderHash,
+                        }
                     }
                 },
             ),
