@@ -14,5 +14,5 @@ export const FAUCET_ABI = parseAbi([
 ]);
 
 export const ARBITRAGE_ABI = parseAbi([
-    "function create(bytes calldata data) external",
+    "function create(bytes memory data) external",
 ]);

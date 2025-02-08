@@ -39,12 +39,9 @@ const parseOrder = (order: SignedOrder) => {
   const isSellShort = orderStruct.makerAsset.toLowerCase() === shortPositionAddress.toLowerCase()
   const isBuyShort = orderStruct.takerAsset.toLowerCase() === shortPositionAddress.toLowerCase()
   const isSellLong = orderStruct.makerAsset.toLowerCase() === longPositionAddress.toLowerCase()
-  elizaLogger.info({
-    isBuyLong,
-    isSellShort,
-    isBuyShort,
-    isSellLong,
-  })
+  assert(isBuyLong || isSellShort || isBuyShort || isSellLong, "Unsupported order")
+
+  const isLongOrder = isBuyLong || isSellShort
 
   const isBuying = isBuyLong || isBuyShort
 
@@ -59,44 +56,42 @@ const parseOrder = (order: SignedOrder) => {
   const decimals = TOKEN_DECIMALS[derivative.token]
   assert(decimals !== undefined, "Unsupported asset")
 
-  elizaLogger.info({
-    isBuying,
-    isLongPosition,
-    totalAmount,
-    quantity,
-    totalMargin,
-    totalPremium,
-    premium
-  })
-
   return {
-    isBuying, premium, quantity
+    isLongOrder, premium, quantity
   }
 }
 
 const findMatchingOrder = (leftOrder: SignedOrder): SignedOrder | undefined => {
   const leftOrderParsed = parseOrder(leftOrder)
+  elizaLogger.info({ leftOrderParsed })
 
-  return orderbook.find(rightOrder => {
+  const matchingOrder: SignedOrder | undefined = orderbook.find(rightOrder => {
     const rightOrderParsed = parseOrder(rightOrder)
+    elizaLogger.info({ rightOrderParsed })
 
     const isSameDerivative = leftOrder.derivativeHash === rightOrder.derivativeHash
+    elizaLogger.info({ isSameDerivative, leftOrderDerivativeHash: leftOrder.derivativeHash, rightOrderDerivativeHash: rightOrder.derivativeHash })
     if (!isSameDerivative) { return false }
 
-    const isMatchingPositions = leftOrderParsed.isBuying !== rightOrderParsed.isBuying
+    const isMatchingPositions = leftOrderParsed.isLongOrder !== rightOrderParsed.isLongOrder
+    elizaLogger.info({ isMatchingPositions, leftOrderIsLong: leftOrderParsed.isLongOrder, rightOrderIsLong: rightOrderParsed.isLongOrder })
     if (!isMatchingPositions) { return false }
 
-    const buyOrder = leftOrderParsed.isBuying ? leftOrderParsed : rightOrderParsed
-    const sellOrder = leftOrderParsed.isBuying ? rightOrderParsed : leftOrderParsed
+    const buyOrder = leftOrderParsed.isLongOrder ? leftOrderParsed : rightOrderParsed
+    const sellOrder = leftOrderParsed.isLongOrder ? rightOrderParsed : leftOrderParsed
 
     const isMatchingPrice = buyOrder.premium >= sellOrder.premium
+    elizaLogger.info({ isMatchingPrice, buyOrderPremium: buyOrder.premium, sellOrderPremium: sellOrder.premium })
     if (!isMatchingPrice) { return false }
 
     const isMatchingQuantity = buyOrder.quantity <= sellOrder.quantity
+    elizaLogger.info({ isMatchingQuantity, buyOrderQuantity: buyOrder.quantity, sellOrderQuantity: sellOrder.quantity })
     if (!isMatchingQuantity) { return false }
 
     return true
   })
+  elizaLogger.info({ matchingOrder })
+  return matchingOrder
 }
 
 export const runArbitrage = async (walletClient: EVMWalletClient) => {
@@ -104,6 +99,7 @@ export const runArbitrage = async (walletClient: EVMWalletClient) => {
     const matchingOrder = findMatchingOrder(signedOrder)
     if (!matchingOrder) { continue }
 
+    elizaLogger.info('Found matching order, creating arbitrage orders...')
     await arbitrageOrders(walletClient, signedOrder, matchingOrder)
   }
 }

@@ -1,8 +1,10 @@
 import { EVMWalletClient } from "@goat-sdk/wallet-evm"
-import { Address, AmountMode, Interaction, LimitOrder, LimitOrderContract, MakerTraits, TakerTraits } from "@1inch/limit-order-sdk"
+import { Address, AmountMode, Interaction, LimitOrder, LimitOrderContract, MakerTraits, randBigInt, TakerTraits } from "@1inch/limit-order-sdk"
+import { elizaLogger } from "@elizaos/core"
+import { UINT_40_MAX } from '@1inch/byte-utils'
 
 import { Derivative, OrderParams, SignedOrder } from "./types"
-import { getDerivativeHash } from "./helpers"
+import { encodeDerivative, getDerivativeHash } from "./helpers"
 import { ARBITRAGE_ABI } from "./abi"
 
 export const LOP_ADDRESS = '0x111111125421cA6dc452d289314280a0f8842A65'
@@ -23,7 +25,11 @@ export const createOrder = async (
   const chainId = wallet.getChain().id
   const maker = wallet.getAddress()
 
-  const makerTraits = MakerTraits.default().withExpiration(expiration)
+  const makerTraits = MakerTraits.default()
+    .disableMultipleFills()
+    .allowPartialFills()
+    .withExpiration(expiration)
+    .withNonce(randBigInt(UINT_40_MAX))
 
   const order = new LimitOrder({
     makerAsset: new Address(orderParams.makerAsset),
@@ -55,32 +61,44 @@ export const arbitrageOrders = async (
   leftOrder: SignedOrder,
   rightOrder: SignedOrder
 ) => {
+  elizaLogger.info('Creating arbitrage orders...')
   // TODO: Implement other modes: liquidate, swap
   // Create mode
+  elizaLogger.info({ leftOrder, rightOrder })
   const quantity = BigInt(leftOrder.orderStruct.takingAmount)
+  elizaLogger.info({ quantity })
+  const encodedDerivative = encodeDerivative(leftOrder.derivative)
+  elizaLogger.info({ encodedDerivative })
+  const rightTakerTraits = TakerTraits.default().setAmountMode(AmountMode.taker).setInteraction(
+    new Interaction(
+      new Address(ARBITRAGE_CONTRACT_ADDRESS),
+      '0xff' + encodedDerivative.slice(2)
+    )
+  )
+  elizaLogger.info({ rightTakerTraits })
   const rightOrderFillCalldata = LimitOrderContract.getFillOrderArgsCalldata(
     rightOrder.orderStruct,
     rightOrder.signature,
-    TakerTraits.default().setAmountMode(AmountMode.taker).setInteraction(
-      new Interaction(
-        new Address(ARBITRAGE_CONTRACT_ADDRESS),
-        '0xff' + 'DERIVATIVE_BYTES.slice(2)'
-      )
-    ),
-    quantity
-  )
-  const calldata = LimitOrderContract.getFillOrderArgsCalldata(
-    leftOrder.orderStruct,
-    leftOrder.signature,
-    TakerTraits.default().setAmountMode(AmountMode.taker).setInteraction(
-      new Interaction(
-        new Address(ARBITRAGE_CONTRACT_ADDRESS),
-        rightOrderFillCalldata
-      )
-    ),
+    rightTakerTraits,
     quantity
   )
 
+  const leftTakerTraits = TakerTraits.default().setAmountMode(AmountMode.taker).setInteraction(
+    new Interaction(
+      new Address(ARBITRAGE_CONTRACT_ADDRESS),
+      rightOrderFillCalldata
+    )
+  )
+  elizaLogger.info({ leftTakerTraits })
+  const calldata = LimitOrderContract.getFillOrderArgsCalldata(
+    leftOrder.orderStruct,
+    leftOrder.signature,
+    leftTakerTraits,
+    quantity
+  )
+  elizaLogger.info({ calldata })
+
+  elizaLogger.info('Sending arbitrage transaction...')
   const tx = await wallet.sendTransaction({
     to: ARBITRAGE_CONTRACT_ADDRESS,
     abi: ARBITRAGE_ABI,

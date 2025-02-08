@@ -11,6 +11,7 @@
     "stop:service:all": "pm2 stop all"
   },
   "dependencies": {
+    "@1inch/byte-utils": "^3.0.0",
     "@1inch/limit-order-sdk": "^4.11.6",
     "@chainsafe/libp2p-gossipsub": "^14.1.0",
     "@chainsafe/libp2p-noise": "^16.0.0",

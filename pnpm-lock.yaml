@@ -12,6 +12,9 @@ importers:
 
   .:
     dependencies:
+      '@1inch/byte-utils':
+        specifier: ^3.0.0
+        version: 3.0.0
       '@1inch/limit-order-sdk':
         specifier: ^4.11.6
         version: 4.11.6(axios@1.7.9)(bufferutil@4.0.9)(utf-8-validate@5.0.10)

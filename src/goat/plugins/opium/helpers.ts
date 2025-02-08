@@ -1,12 +1,13 @@
 import { arbitrum } from "viem/chains";
 import assert from "assert";
 import moment from "moment";
-import { keccak256, getCreate2Address, encodePacked, parseUnits } from "viem";
+import { keccak256, getCreate2Address, encodePacked, parseUnits, encodeAbiParameters, parseAbiParameters } from "viem";
 import { EVMWalletClient } from "@goat-sdk/wallet-evm";
 
 import { Derivative, OrderParams, PositionType, Quote } from "./types.ts";
 import { ERC20_ABI, FAUCET_ABI } from "./abi.ts";
 import { LOP_ADDRESS } from "./lop.ts";
+import { elizaLogger } from "@elizaos/core";
 
 const SUPPORTED_CHAINS = [arbitrum];
 const SUPPORTED_ASSETS = ['ETH']
@@ -160,6 +161,26 @@ export const getDerivativeHash = (derivative: Derivative): `0x${string}` => {
         derivative.syntheticId as `0x${string}`,
       ]
     )
+  )
+}
+
+export const encodeDerivative = (derivative: Derivative): `0x${string}` => {
+  elizaLogger.info('encodeDerivative()')
+  elizaLogger.info({ derivative })
+  const params = parseAbiParameters([
+    '(uint256 margin, uint256 endTime, uint256[] params, address oracleId, address token, address syntheticId) derivative'
+  ])
+  elizaLogger.info({ params })
+  return encodeAbiParameters(
+    params,
+    [{
+      margin: derivative.margin,
+      endTime: BigInt(derivative.endTime),
+      params: derivative.params,
+      oracleId: derivative.oracleId as `0x${string}`,
+      token: derivative.token as `0x${string}`,
+      syntheticId: derivative.syntheticId as `0x${string}`,
+    }]
   )
 }
 
