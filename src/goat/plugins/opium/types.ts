@@ -32,6 +32,9 @@ export type SignedOrder = {
   orderStruct: LimitOrderV4Struct
   orderHash: string
   signature: string
+  derivative: Derivative
+  longPositionAddress: string
+  shortPositionAddress: string
 }
 
 export type FillParams = {

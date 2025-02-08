@@ -1,13 +1,16 @@
 import { EVMWalletClient } from "@goat-sdk/wallet-evm"
-import { Address, LimitOrder, LimitOrderContract, MakerTraits, TakerTraits } from "@1inch/limit-order-sdk"
+import { Address, LimitOrder, LimitOrderContract, MakerTraits } from "@1inch/limit-order-sdk"
 
-import { FillParams, OrderParams, SignedOrder } from "./types"
+import { Derivative, FillParams, OrderParams, SignedOrder } from "./types"
 
 const LOP_ADDRESS = '0x111111125421cA6dc452d289314280a0f8842A65'
 
 export const createOrder = async (
   wallet: EVMWalletClient,
-  orderParams: OrderParams
+  orderParams: OrderParams,
+  derivative: Derivative,
+  longPositionAddress: string,
+  shortPositionAddress: string
 ): Promise<SignedOrder> => {
   const now = ~~(Date.now() / 1000)
   const expiresIn = 120n // 2m
@@ -35,7 +38,10 @@ export const createOrder = async (
     chainId,
     orderStruct,
     orderHash,
-    signature: signature.signature
+    signature: signature.signature,
+    derivative,
+    longPositionAddress,
+    shortPositionAddress
   }
 }
 

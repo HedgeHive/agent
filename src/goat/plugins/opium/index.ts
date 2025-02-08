@@ -54,7 +54,7 @@ export class OpiumPlugin extends PluginBase {
                     if (!matchingFillParams) {
                         const orderParams = getOrderParams(derivative, longPositionAddress, shortPositionAddress, quote)
                         elizaLogger.info({ orderParams })
-                        const signedOrder = await createOrder(walletClient, orderParams)
+                        const signedOrder = await createOrder(walletClient, orderParams, derivative, longPositionAddress, shortPositionAddress)
                         addOrder(signedOrder)
                         return {
                             text: `No matching orders were found. New order was placed instead, orderHash=${signedOrder.orderHash}`,
