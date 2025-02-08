@@ -1,6 +1,7 @@
 import { elizaLogger } from "@elizaos/core"
 import assert from "assert"
 import { EVMWalletClient } from "@goat-sdk/wallet-evm"
+import { MakerTraits } from "@1inch/limit-order-sdk"
 
 import { SignedOrder } from "./types.ts"
 import { getInitialMargin, TOKEN_DECIMALS } from "./helpers.ts"
@@ -33,6 +34,14 @@ export const removeOrder = (orderHash: string) => {
 const parseOrder = (order: SignedOrder) => {
   const { derivative, longPositionAddress, shortPositionAddress, orderStruct } = order
 
+  const now = BigInt(~~(Date.now() / 1000))
+
+  const makerTraits = new MakerTraits(BigInt(orderStruct.makerTraits))
+  const expiration = makerTraits.expiration()
+  assert(expiration !== null, "Order has no expiration")
+
+  const isExpired = expiration < now
+
   const { shortMargin } = getInitialMargin(derivative)
 
   const isBuyLong = orderStruct.takerAsset.toLowerCase() === longPositionAddress.toLowerCase()
@@ -57,7 +66,7 @@ const parseOrder = (order: SignedOrder) => {
   assert(decimals !== undefined, "Unsupported asset")
 
   return {
-    isLongOrder, premium, quantity
+    isLongOrder, premium, quantity, isExpired
   }
 }
 
@@ -65,9 +74,13 @@ const findMatchingOrder = (leftOrder: SignedOrder): SignedOrder | undefined => {
   const leftOrderParsed = parseOrder(leftOrder)
   elizaLogger.info({ leftOrderParsed })
 
+  if (leftOrderParsed.isExpired) { return }
+
   const matchingOrder: SignedOrder | undefined = orderbook.find(rightOrder => {
     const rightOrderParsed = parseOrder(rightOrder)
     elizaLogger.info({ rightOrderParsed })
+
+    if (rightOrderParsed.isExpired) { return false }
 
     const isSameDerivative = leftOrder.derivativeHash === rightOrder.derivativeHash
     elizaLogger.info({ isSameDerivative, leftOrderDerivativeHash: leftOrder.derivativeHash, rightOrderDerivativeHash: rightOrder.derivativeHash })
@@ -101,5 +114,14 @@ export const runArbitrage = async (walletClient: EVMWalletClient) => {
 
     elizaLogger.info('Found matching order, creating arbitrage orders...')
     await arbitrageOrders(walletClient, signedOrder, matchingOrder)
+  }
+}
+
+export const clearExpiredOrders = () => {
+  for (const signedOrder of orderbook) {
+    const parsedSignedOrder = parseOrder(signedOrder)
+    if (parsedSignedOrder.isExpired) {
+      orderbook.slice(orderbook.indexOf(signedOrder), 1)
+    }
   }
 }

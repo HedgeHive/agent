@@ -64,10 +64,17 @@ export async function createAgent(
     chain: arbitrum,
   });
 
+  const goatWalletClient = viem(walletClient)
+
   const goatActions = await getOnChainActions({
-    wallet: viem(walletClient),
+    wallet: goatWalletClient,
     plugins: [
-      opium({})
+      opium({
+        arbitrageur: {
+          enabled: true,
+          wallet: goatWalletClient
+        }
+      })
     ]
   })
 

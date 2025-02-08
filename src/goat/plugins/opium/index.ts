@@ -6,13 +6,39 @@ import { elizaLogger } from "@elizaos/core";
 
 import { createOrder } from "./lop.ts";
 import { performBalanceAndAllowanceChecks, getOrderParams, getPositionAddress, isChainIdSupported, parseDerivative } from "./helpers.ts";
-import { addOrder, runArbitrage } from "./orderbook.ts";
+import { addOrder, clearExpiredOrders, runArbitrage } from "./orderbook.ts";
 import { PositionType, Quote } from "./types.ts";
 
-export type OpiumPluginParams = {}
+export type OpiumPluginParams = {
+    arbitrageur?: {
+        enabled: boolean
+        wallet: EVMWalletClient
+    }
+}
 export class OpiumPlugin extends PluginBase {
     constructor(readonly params: OpiumPluginParams) {
         super("opium", []);
+
+        if (params.arbitrageur && params.arbitrageur.enabled) {
+            setInterval(() => {
+                runArbitrage(params.arbitrageur.wallet)
+                    .then(() => {
+                        elizaLogger.info("Arbitrage run completed")
+                    })
+                    .catch((err) => {
+                        elizaLogger.error("Arbitrage run failed", err)
+                    })
+            }, 60 * 1000) // 1 minute
+        }
+
+        setInterval(() => {
+            try {
+                clearExpiredOrders()
+                elizaLogger.info("Cleared expired orders")
+            } catch (err) {
+                elizaLogger.error("Failed to clear expired orders", err)
+            }
+        }, 60 * 1000) // 1 minute
     }
 
     supportsChain = (chain: Chain) => chain.type === "evm" && isChainIdSupported(chain.id)
@@ -21,8 +47,8 @@ export class OpiumPlugin extends PluginBase {
         return [
             createTool(
                 {
-                    name: "debug_call",
-                    description: "Call this action if asked",
+                    name: "debug_runArbitrage",
+                    description: "This is a debug function for your developers. Only call this action if asked explicitly",
                     parameters: z.object({})
                 },
                 async () => {
