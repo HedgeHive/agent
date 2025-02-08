@@ -64,7 +64,18 @@ class KaDDHTNetwork implements OrderNetwork {
 
         await this.node.services.pubsub.subscribe(this.topic)
         this.node.services.pubsub.addEventListener("message", (evt) => {
-            const order = JSON.parse(uint8ArrayToString(evt.detail.data))
+            const order = JSON.parse(
+                uint8ArrayToString(evt.detail.data),
+                (name, value) => {
+                    if (typeof value === 'string' && /^\d+n?$/.test(value) && (name.includes('margin'))) {
+                        return BigInt(value)
+                    }
+                    if (typeof value === 'object' && Array.isArray(value) && name.includes('params')) {
+                        return value.map(v => BigInt(v))
+                    }
+                    return value
+                }
+            )
             console.log('Order received', this.topic, order)
             this.orderListeners.forEach(c => c(order).catch(error => console.error(error)))
         })
@@ -73,7 +84,11 @@ class KaDDHTNetwork implements OrderNetwork {
     async push(order: Order) {
         try {
             console.log('Pushing order', order)
-            await this.node.services.pubsub.publish(this.topic, uint8ArrayFromString(JSON.stringify(order)))
+
+            await this.node.services.pubsub.publish(this.topic, uint8ArrayFromString(JSON.stringify(
+                order,
+                (_, value) => typeof value === 'bigint' ? value.toString() : value
+            )))
         } catch (error) {
             if (error.message === 'PublishError.NoPeersSubscribedToTopic') {
                 console.warn('No subscribed nodes found')

@@ -14,7 +14,7 @@ let network: undefined|OrderNetwork = undefined
 createKaDDHTNetwork()
   .then(n => {
     network = n
-    network.subscribe(async (o: SignedOrder) => { orderbook.push(o) })
+    network.subscribe(async (o: SignedOrder) => { console.log('Received order from peers', o); orderbook.push(o) })
   })
   .catch(error => console.error('failed to create network', error))
 
