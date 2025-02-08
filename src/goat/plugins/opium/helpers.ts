@@ -2,7 +2,6 @@ import { arbitrum } from "viem/chains";
 import assert from "assert";
 import moment from "moment";
 import { keccak256, getCreate2Address, encodePacked, parseUnits } from "viem";
-import { elizaLogger } from "@elizaos/core";
 import { EVMWalletClient } from "@goat-sdk/wallet-evm";
 
 import { Derivative, OrderParams, PositionType, Quote } from "./types.ts";
@@ -118,7 +117,7 @@ export const getOrderParams = (derivative: Derivative, longPositionAddress: stri
 }
 
 /**
- * 
+ *
  * @param {string} instrumentName - The instrument name in the format of "UNDERLYING_ASSET-MATURITY-STRIKE_PRICE-TYPE"
  * @returns {Derivative} - The derivative object
  */

@@ -57,7 +57,7 @@ export async function createAgent(
   const account = privateKeyToAccount(
     process.env.WALLET_PRIVATE_KEY as `0x${string}`
   );
-  
+
   const walletClient = createWalletClient({
     account: account,
     transport: http(process.env.RPC_URL),

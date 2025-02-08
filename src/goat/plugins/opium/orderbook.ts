@@ -5,10 +5,21 @@ import { EVMWalletClient } from "@goat-sdk/wallet-evm"
 import { SignedOrder } from "./types.ts"
 import { getInitialMargin, TOKEN_DECIMALS } from "./helpers.ts"
 import { arbitrageOrders } from "./lop.ts"
+import { createKaDDHTNetwork } from "../../../network"
+import { OrderNetwork } from "../../../network/orderNetwork"
 
-const orderbook: Array<SignedOrder> = []
+export const orderbook: Array<SignedOrder> = []
+
+let network: undefined|OrderNetwork = undefined
+createKaDDHTNetwork()
+  .then(n => {
+    network = n
+    network.subscribe(async (o: SignedOrder) => { console.log('Received order from peers', o); orderbook.push(o) })
+  })
+  .catch(error => console.error('failed to create network', error))
 
 export const addOrder = (order: SignedOrder) => {
+  network?.push(order).catch(error => console.error('failed to push order', error))
   orderbook.push(order)
 }
 
@@ -36,10 +47,10 @@ const parseOrder = (order: SignedOrder) => {
   })
 
   const isBuying = isBuyLong || isBuyShort
-  
+
   const totalAmount = isBuying ? BigInt(orderStruct.makingAmount) : BigInt(orderStruct.takingAmount)
   const quantity = isBuying ? BigInt(orderStruct.takingAmount) : BigInt(orderStruct.makingAmount)
-  
+
   const isLongPosition = isBuyLong || isSellLong
   const totalMargin = isLongPosition ? 0n : shortMargin * quantity / BigInt(1e18)
   const totalPremium = isLongPosition ? totalAmount : totalMargin - totalAmount
@@ -47,7 +58,7 @@ const parseOrder = (order: SignedOrder) => {
 
   const decimals = TOKEN_DECIMALS[derivative.token]
   assert(decimals !== undefined, "Unsupported asset")
-    
+
   elizaLogger.info({
     isBuying,
     isLongPosition,
