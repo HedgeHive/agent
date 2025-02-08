@@ -43,6 +43,12 @@ export class OpiumPlugin extends PluginBase {
                     const longPositionAddress = getPositionAddress(derivative, PositionType.LONG);
                     const shortPositionAddress = getPositionAddress(derivative, PositionType.SHORT);
 
+                    elizaLogger.info({
+                        derivative,
+                        longPositionAddress,
+                        shortPositionAddress
+                    })
+
                     const quote: Quote = {
                         quantity: parameters.quantity,
                         price: parameters.price,

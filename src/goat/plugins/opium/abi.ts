@@ -12,3 +12,7 @@ export const ERC20_ABI = parseAbi([
 export const FAUCET_ABI = parseAbi([
     "function claim() external",
 ]);
+
+export const ARBITRAGE_ABI = parseAbi([
+    "function create(bytes calldata data) external",
+]);

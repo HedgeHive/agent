@@ -33,12 +33,8 @@ export type SignedOrder = {
   orderHash: string
   signature: string
   derivative: Derivative
+  derivativeHash: string
   longPositionAddress: string
   shortPositionAddress: string
 }
 
-export type FillParams = {
-  signedOrder: SignedOrder
-  takerTraits: TakerTraits
-  amount: bigint
-}

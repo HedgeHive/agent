@@ -1,10 +1,10 @@
 import { elizaLogger } from "@elizaos/core"
-import { AmountMode, TakerTraits } from "@1inch/limit-order-sdk"
-import { parseUnits } from "viem"
 import assert from "assert"
+import { EVMWalletClient } from "@goat-sdk/wallet-evm"
 
-import { Derivative, FillParams, Quote, SignedOrder } from "./types.ts"
-import { TOKEN_DECIMALS } from "./helpers.ts"
+import { SignedOrder } from "./types.ts"
+import { getInitialMargin, TOKEN_DECIMALS } from "./helpers.ts"
+import { arbitrageOrders } from "./lop.ts"
 
 const orderbook: Array<SignedOrder> = []
 
@@ -19,85 +19,80 @@ export const removeOrder = (orderHash: string) => {
   }
 }
 
-export const findMatchingOrder = (derivative: Derivative, longPositionAddress: string, shortPositionAddress: string, quote: Quote): FillParams | undefined => {
-  /**
-   * If isBuy is true, we are looking for a sell order, meaning either Buy SHORT position or sell LONG position
-   * If isBuy is false, we are looking for a buy order, meaning either Buy LONG position or sell SHORT position
-   */
-  elizaLogger.info({ derivative, longPositionAddress, shortPositionAddress, quote, orderbook })
+const parseOrder = (order: SignedOrder) => {
+  const { derivative, longPositionAddress, shortPositionAddress, orderStruct } = order
 
-  const {
-    margin: nominal,
-    params: [, collateralization]
-  } = derivative
-  const initialMargin = nominal * collateralization / BigInt(1e18)
+  const { shortMargin } = getInitialMargin(derivative)
 
-  const signedOrder = orderbook.map(signedOrder => {
-    const isBuyLong = signedOrder.orderStruct.takerAsset.toLowerCase() === longPositionAddress.toLowerCase()
-    const isSellShort = signedOrder.orderStruct.makerAsset.toLowerCase() === shortPositionAddress.toLowerCase()
-    const isBuyShort = signedOrder.orderStruct.takerAsset.toLowerCase() === shortPositionAddress.toLowerCase()
-    const isSellLong = signedOrder.orderStruct.makerAsset.toLowerCase() === longPositionAddress.toLowerCase()
-    const isMatchingPositions = (quote.isBuy && (isBuyShort || isSellLong)) || (!quote.isBuy && (isBuyLong || isSellShort))
-    elizaLogger.info({
-      isBuyLong,
-      isSellShort,
-      isBuyShort,
-      isSellLong,
-      isMatchingPositions
-    })
-    if (!isMatchingPositions) { return null }
+  const isBuyLong = orderStruct.takerAsset.toLowerCase() === longPositionAddress.toLowerCase()
+  const isSellShort = orderStruct.makerAsset.toLowerCase() === shortPositionAddress.toLowerCase()
+  const isBuyShort = orderStruct.takerAsset.toLowerCase() === shortPositionAddress.toLowerCase()
+  const isSellLong = orderStruct.makerAsset.toLowerCase() === longPositionAddress.toLowerCase()
+  elizaLogger.info({
+    isBuyLong,
+    isSellShort,
+    isBuyShort,
+    isSellLong,
+  })
 
-    const isBuying = isBuyLong || isBuyShort
-    const isLongPosition = isBuyLong || isSellLong
+  const isBuying = isBuyLong || isBuyShort
+  
+  const totalAmount = isBuying ? BigInt(orderStruct.makingAmount) : BigInt(orderStruct.takingAmount)
+  const quantity = isBuying ? BigInt(orderStruct.takingAmount) : BigInt(orderStruct.makingAmount)
+  
+  const isLongPosition = isBuyLong || isSellLong
+  const totalMargin = isLongPosition ? 0n : shortMargin * quantity / BigInt(1e18)
+  const totalPremium = isLongPosition ? totalAmount : totalMargin - totalAmount
+  const premium = totalPremium * BigInt(1e18) / quantity
 
-    const totalAmount = isBuying ? BigInt(signedOrder.orderStruct.makingAmount) : BigInt(signedOrder.orderStruct.takingAmount)
-    const quantity = isBuying ? BigInt(signedOrder.orderStruct.takingAmount) : BigInt(signedOrder.orderStruct.makingAmount)
+  const decimals = TOKEN_DECIMALS[derivative.token]
+  assert(decimals !== undefined, "Unsupported asset")
+    
+  elizaLogger.info({
+    isBuying,
+    isLongPosition,
+    totalAmount,
+    quantity,
+    totalMargin,
+    totalPremium,
+    premium
+  })
 
-    const totalMargin = isLongPosition ? 0n : initialMargin * quantity / BigInt(1e18)
-    const totalPremium = isLongPosition ? totalAmount : totalMargin - totalAmount
-    const premium = totalPremium * BigInt(1e18) / quantity
+  return {
+    isBuying, premium, quantity
+  }
+}
 
-    const decimals = TOKEN_DECIMALS[derivative.token]
-    assert(decimals !== undefined, "Unsupported asset")
+const findMatchingOrder = (leftOrder: SignedOrder): SignedOrder | undefined => {
+  const leftOrderParsed = parseOrder(leftOrder)
 
-    const quotePrice = parseUnits(quote.price.toFixed(decimals), decimals)
-    const isMatchingPrice = isBuying ? premium <= quotePrice : premium >= quotePrice
-    elizaLogger.info({
-      isBuying,
-      isLongPosition,
-      totalAmount,
-      quantity,
-      totalMargin,
-      totalPremium,
-      premium,
-      quotePrice,
-      isMatchingPrice,
-    })
-    if (!isMatchingPrice) { return null }
+  return orderbook.find(rightOrder => {
+    const rightOrderParsed = parseOrder(rightOrder)
 
-    const quoteQuantity = parseUnits(quote.quantity.toFixed(18), 18)
-    const isMatchingQuantity = quoteQuantity <= quantity
-    elizaLogger.info({
-      quoteQuantity,
-      isMatchingQuantity,
-    })
-    if (!isMatchingQuantity) { return null }
+    const isSameDerivative = leftOrder.derivativeHash === rightOrder.derivativeHash
+    if (!isSameDerivative) { return false }
 
-    // TODO: Check if we can use hooks for creation / liquidation of pairs?
-    const takerTraits = TakerTraits.default().setAmountMode(isBuying ? AmountMode.taker : AmountMode.maker)
+    const isMatchingPositions = leftOrderParsed.isBuying !== rightOrderParsed.isBuying
+    if (!isMatchingPositions) { return false }
 
-    elizaLogger.info({
-      takerTraits
-    })
+    const buyOrder = leftOrderParsed.isBuying ? leftOrderParsed : rightOrderParsed
+    const sellOrder = leftOrderParsed.isBuying ? rightOrderParsed : leftOrderParsed
 
-    return {
-      signedOrder,
-      takerTraits,
-      amount: quoteQuantity
-    }
-  }).find(s => s !== null)
+    const isMatchingPrice = buyOrder.premium >= sellOrder.premium
+    if (!isMatchingPrice) { return false }
 
-  if (!signedOrder) { return }
+    const isMatchingQuantity = buyOrder.quantity <= sellOrder.quantity
+    if (!isMatchingQuantity) { return false }
 
-  return signedOrder
+    return true
+  })
+}
+
+const runArbitrage = async (walletClient: EVMWalletClient) => {
+  for (const signedOrder of orderbook) {
+    const matchingOrder = findMatchingOrder(signedOrder)
+    if (!matchingOrder) { continue }
+
+    await arbitrageOrders(walletClient, signedOrder, matchingOrder)
+  }
 }
