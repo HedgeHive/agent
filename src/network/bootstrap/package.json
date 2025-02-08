@@ -1,0 +1,33 @@
+{
+    "name": "bootstrap-node",
+    "version": "0.0.1",
+    "license": "Apache-2.0 OR MIT",
+    "type": "module",
+    "files": [
+        "src",
+        "dist",
+        "!dist/test",
+        "!**/*.tsbuildinfo"
+    ],
+    "exports": {
+        ".": {
+            "types": "./dist/src/index.d.ts",
+            "import": "./src/index.js"
+        }
+    },
+    "scripts": {
+        "start": "node ./index.js"
+    },
+    "dependencies": {
+        "@chainsafe/libp2p-gossipsub": "^14.1.0",
+        "@chainsafe/libp2p-noise": "^16.0.0",
+        "@chainsafe/libp2p-yamux": "^7.0.0",
+        "@libp2p/identify": "^3.0.1",
+        "@libp2p/kad-dht": "^14.2.2",
+        "@libp2p/ping": "^2.0.17",
+        "@libp2p/tcp": "^10.0.17",
+        "libp2p": "^2.0.0",
+        "uint8arrays": "^5.1.0"
+    },
+    "private": true
+}
