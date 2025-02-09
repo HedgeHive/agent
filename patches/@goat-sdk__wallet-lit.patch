@@ -1,0 +1,1433 @@
+diff --git a/dist/chunk-2D4AW4B3.js b/dist/chunk-2D4AW4B3.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..9e8f732e6470f77b63de0521f87e2175f45a3085
+--- /dev/null
++++ b/dist/chunk-2D4AW4B3.js
+@@ -0,0 +1,189 @@
++"use strict";Object.defineProperty(exports, "__esModule", {value: true}); function _nullishCoalesce(lhs, rhsFn) { if (lhs != null) { return lhs; } else { return rhsFn(); } }
++
++var _chunkF4SFALW3js = require('./chunk-F4SFALW3.js');
++
++
++var _chunk7QVYU63Ejs = require('./chunk-7QVYU63E.js');
++
++// src/evm.ts
++var _wrappedkeys = require('@lit-protocol/wrapped-keys');
++var _viem = require('viem');
++var _chains = require('viem/chains');
++var _ens = require('viem/ens');
++var _walletevm = require('@goat-sdk/wallet-evm');
++var { signMessageWithEncryptedKey, signTransactionWithEncryptedKey } = _wrappedkeys.api;
++var LitEVMWalletClient = class extends _walletevm.EVMWalletClient {
++  static {
++    _chunk7QVYU63Ejs.__name.call(void 0, this, "LitEVMWalletClient");
++  }
++  
++  
++  
++  
++  
++  
++  
++  get viemPublicClient() {
++    return this.viemWalletClient.extend(_viem.publicActions);
++  }
++  constructor(options) {
++    super(), this.options = options;
++    this.litNodeClient = options.litNodeClient;
++    this.pkpSessionSigs = options.pkpSessionSigs;
++    this.wrappedKeyMetadata = options.wrappedKeyMetadata;
++    this.chainId = options.chainId;
++    this.litEVMChainIdentifier = options.litEVMChainIdentifier;
++    this.viemWalletClient = options.viemWalletClient;
++  }
++  getPkpAccessControlCondition(pkpAddress) {
++    if (!_viem.isAddress.call(void 0, pkpAddress)) {
++      throw new Error(`pkpAddress is not a valid Ethereum Address: ${pkpAddress}`);
++    }
++    return {
++      contractAddress: "",
++      standardContractType: "",
++      chain: "ethereum",
++      method: "",
++      parameters: [
++        ":userAddress"
++      ],
++      returnValueTest: {
++        comparator: "=",
++        value: pkpAddress
++      }
++    };
++  }
++  async resolveAddress(address) {
++    if (/^0x[a-fA-F0-9]{40}$/.test(address)) return address;
++    try {
++      const resolvedAddress = await this.viemPublicClient.getEnsAddress({
++        name: _ens.normalize.call(void 0, address)
++      });
++      if (!resolvedAddress) {
++        throw new Error("ENS name could not be resolved.");
++      }
++      return resolvedAddress;
++    } catch (error) {
++      throw new Error(`Failed to resolve ENS name: ${error}`);
++    }
++  }
++  async waitForReceipt(hash) {
++    const receipt = await this.viemPublicClient.waitForTransactionReceipt({
++      hash
++    });
++    return {
++      hash: receipt.transactionHash,
++      status: receipt.status ? "success" : "failure"
++    };
++  }
++  getAddress() {
++    return this.wrappedKeyMetadata.wrappedKeyAddress;
++  }
++  getChain() {
++    return {
++      type: "evm",
++      id: _nullishCoalesce(this.options.chainId, () => ( 0))
++    };
++  }
++  async signMessage(message) {
++    const signature = await signMessageWithEncryptedKey({
++      pkpSessionSigs: this.pkpSessionSigs,
++      network: "evm",
++      id: this.wrappedKeyMetadata.id,
++      messageToSign: message,
++      litNodeClient: this.litNodeClient
++    });
++    return {
++      signature
++    };
++  }
++  async signTypedData(data) {
++    const response = await this.litNodeClient.executeJs({
++      sessionSigs: this.pkpSessionSigs,
++      code: _chunkF4SFALW3js.signEip712MessageLitActionCode,
++      jsParams: {
++        accessControlConditions: [
++          this.getPkpAccessControlCondition(this.wrappedKeyMetadata.pkpAddress)
++        ],
++        ciphertext: this.wrappedKeyMetadata.ciphertext,
++        dataToEncryptHash: this.wrappedKeyMetadata.dataToEncryptHash,
++        messageToSign: JSON.stringify(data)
++      }
++    });
++    return {
++      signature: response.response
++    };
++  }
++  async sendTransaction(transaction) {
++    const { to, abi, functionName, args, value } = transaction;
++    const toAddress = await this.resolveAddress(to);
++    if (!abi) {
++      const litTransaction = {
++        chainId: this.chainId,
++        chain: this.litEVMChainIdentifier,
++        toAddress,
++        value: _viem.formatEther.call(void 0, _nullishCoalesce(value, () => ( 0n)))
++      };
++      const txHash2 = await signTransactionWithEncryptedKey({
++        litNodeClient: this.litNodeClient,
++        pkpSessionSigs: this.pkpSessionSigs,
++        network: "evm",
++        id: this.wrappedKeyMetadata.id,
++        unsignedTransaction: litTransaction,
++        broadcast: true
++      });
++      return this.waitForReceipt(txHash2);
++    }
++    if (!functionName) {
++      throw new Error("Function name is required for contract calls");
++    }
++    const { request } = await this.viemPublicClient.simulateContract({
++      account: this.wrappedKeyMetadata.wrappedKeyAddress,
++      address: toAddress,
++      abi,
++      functionName,
++      args,
++      chain: this.viemWalletClient.chain,
++      value
++    });
++    const txHash = await this.viemWalletClient.writeContract(request);
++    return this.waitForReceipt(txHash);
++  }
++  async read(request) {
++    const { address, abi, functionName, args } = request;
++    if (!abi) throw new Error("Read request must include ABI for EVM");
++    const result = await this.viemPublicClient.readContract({
++      address: await this.resolveAddress(address),
++      abi,
++      functionName,
++      args
++    });
++    return {
++      value: result
++    };
++  }
++  async balanceOf(address) {
++    const resolvedAddress = await this.resolveAddress(address);
++    const balance = await this.viemPublicClient.getBalance({
++      address: resolvedAddress
++    });
++    const chain = _nullishCoalesce(this.viemWalletClient.chain, () => ( _chains.mainnet));
++    return {
++      value: _viem.formatUnits.call(void 0, balance, chain.nativeCurrency.decimals),
++      decimals: chain.nativeCurrency.decimals,
++      symbol: chain.nativeCurrency.symbol,
++      name: chain.nativeCurrency.name,
++      inBaseUnits: balance.toString()
++    };
++  }
++};
++function createEVMWallet(options) {
++  return new LitEVMWalletClient(options);
++}
++_chunk7QVYU63Ejs.__name.call(void 0, createEVMWallet, "createEVMWallet");
++
++
++
++
++exports.LitEVMWalletClient = LitEVMWalletClient; exports.createEVMWallet = createEVMWallet;
++//# sourceMappingURL=chunk-2D4AW4B3.js.map
+\ No newline at end of file
+diff --git a/dist/chunk-2D4AW4B3.js.map b/dist/chunk-2D4AW4B3.js.map
+new file mode 100644
+index 0000000000000000000000000000000000000000..e73d44555249ff135c0f513ed48dc67becaf36d3
+--- /dev/null
++++ b/dist/chunk-2D4AW4B3.js.map
+@@ -0,0 +1 @@
++{"version":3,"sources":["/Users/evzhen/workspace/goat/typescript/packages/wallets/lit-protocol/dist/chunk-2D4AW4B3.js","../src/evm.ts"],"names":["signMessageWithEncryptedKey","signTransactionWithEncryptedKey","api","LitEVMWalletClient","EVMWalletClient","litNodeClient","pkpSessionSigs","wrappedKeyMetadata","chainId","litEVMChainIdentifier","viemWalletClient","viemPublicClient","extend","publicActions","constructor","options","getPkpAccessControlCondition","pkpAddress","isAddress","Error","address","resolvedAddress","hash","transactionHash","wrappedKeyAddress","id","message","signature","signEip712MessageLitActionCode","ciphertext","dataToEncryptHash","data","response","transaction","to","toAddress","litTransaction","txHash","abi","functionName","args","chain","value","request","result","mainnet","decimals","symbol","name","createEVMWallet"],"mappings":"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","file":"/Users/evzhen/workspace/goat/typescript/packages/wallets/lit-protocol/dist/chunk-2D4AW4B3.js","sourcesContent":[null,"import type { EVMReadRequest, EVMReadResult, EVMTransaction, EVMTypedData } from \"@goat-sdk/wallet-evm\";\nimport type { AccsDefaultParams, SessionSigsMap } from \"@lit-protocol/types\";\nimport { type EthereumLitTransaction, StoredKeyData, api } from \"@lit-protocol/wrapped-keys\";\nimport { formatEther, formatUnits, isAddress, publicActions } from \"viem\";\nimport { mainnet } from \"viem/chains\";\nimport { normalize } from \"viem/ens\";\nimport { signEip712MessageLitActionCode } from \"./litActions/evmWrappedKeySignEip712Message\";\nimport type { LitEVMWalletOptions } from \"./types\";\n\nimport { type EvmChain, type Signature } from \"@goat-sdk/core\";\nimport { EVMWalletClient } from \"@goat-sdk/wallet-evm\";\nimport { LitNodeClient } from \"@lit-protocol/lit-node-client\";\n\nimport { WalletClient as ViemWalletClient } from \"viem\";\n\nconst { signMessageWithEncryptedKey, signTransactionWithEncryptedKey } = api;\n\nexport class LitEVMWalletClient extends EVMWalletClient {\n    private litNodeClient: LitNodeClient;\n    private pkpSessionSigs: SessionSigsMap;\n    private wrappedKeyMetadata: StoredKeyData & { wrappedKeyAddress: string };\n    private chainId: number;\n    private litEVMChainIdentifier: string;\n    private viemWalletClient: ViemWalletClient;\n\n    private get viemPublicClient() {\n        return this.viemWalletClient.extend(publicActions);\n    }\n\n    constructor(private options: LitEVMWalletOptions) {\n        super();\n        this.litNodeClient = options.litNodeClient;\n        this.pkpSessionSigs = options.pkpSessionSigs;\n        this.wrappedKeyMetadata = options.wrappedKeyMetadata;\n        this.chainId = options.chainId;\n        this.litEVMChainIdentifier = options.litEVMChainIdentifier;\n        this.viemWalletClient = options.viemWalletClient;\n    }\n\n    private getPkpAccessControlCondition(pkpAddress: string): AccsDefaultParams {\n        if (!isAddress(pkpAddress)) {\n            throw new Error(`pkpAddress is not a valid Ethereum Address: ${pkpAddress}`);\n        }\n\n        return {\n            contractAddress: \"\",\n            standardContractType: \"\",\n            chain: \"ethereum\",\n            method: \"\",\n            parameters: [\":userAddress\"],\n            returnValueTest: {\n                comparator: \"=\",\n                value: pkpAddress,\n            },\n        };\n    }\n\n    async resolveAddress(address: string): Promise<`0x${string}`> {\n        if (/^0x[a-fA-F0-9]{40}$/.test(address)) return address as `0x${string}`;\n\n        try {\n            const resolvedAddress = (await this.viemPublicClient.getEnsAddress({\n                name: normalize(address),\n            })) as `0x${string}`;\n            if (!resolvedAddress) {\n                throw new Error(\"ENS name could not be resolved.\");\n            }\n            return resolvedAddress;\n        } catch (error) {\n            throw new Error(`Failed to resolve ENS name: ${error}`);\n        }\n    }\n\n    private async waitForReceipt(hash: `0x${string}`): Promise<{ hash: string; status: string }> {\n        const receipt = await this.viemPublicClient.waitForTransactionReceipt({\n            hash,\n        });\n        return {\n            hash: receipt.transactionHash,\n            status: receipt.status ? \"success\" : \"failure\",\n        };\n    }\n\n    getAddress(): string {\n        return this.wrappedKeyMetadata.wrappedKeyAddress;\n    }\n\n    getChain(): EvmChain {\n        return {\n            type: \"evm\" as const,\n            id: this.options.chainId ?? 0,\n        };\n    }\n\n    async signMessage(message: string): Promise<Signature> {\n        const signature = await signMessageWithEncryptedKey({\n            pkpSessionSigs: this.pkpSessionSigs,\n            network: \"evm\",\n            id: this.wrappedKeyMetadata.id,\n            messageToSign: message,\n            litNodeClient: this.litNodeClient,\n        });\n        return { signature };\n    }\n\n    async signTypedData(data: EVMTypedData): Promise<Signature> {\n        const response = await this.litNodeClient.executeJs({\n            sessionSigs: this.pkpSessionSigs,\n            code: signEip712MessageLitActionCode,\n            jsParams: {\n                accessControlConditions: [this.getPkpAccessControlCondition(this.wrappedKeyMetadata.pkpAddress)],\n                ciphertext: this.wrappedKeyMetadata.ciphertext,\n                dataToEncryptHash: this.wrappedKeyMetadata.dataToEncryptHash,\n                messageToSign: JSON.stringify(data),\n            },\n        });\n\n        return {\n            signature: response.response as string,\n        };\n    }\n\n    async sendTransaction(transaction: EVMTransaction): Promise<{ hash: string }> {\n        const { to, abi, functionName, args, value } = transaction;\n        const toAddress = await this.resolveAddress(to);\n\n        // Simple ETH transfer (no ABI)\n        if (!abi) {\n            const litTransaction: EthereumLitTransaction = {\n                chainId: this.chainId,\n                chain: this.litEVMChainIdentifier,\n                toAddress,\n                value: formatEther(value ?? 0n),\n            };\n\n            const txHash = await signTransactionWithEncryptedKey({\n                litNodeClient: this.litNodeClient,\n                pkpSessionSigs: this.pkpSessionSigs,\n                network: \"evm\",\n                id: this.wrappedKeyMetadata.id,\n                unsignedTransaction: litTransaction,\n                broadcast: true,\n            });\n            return this.waitForReceipt(txHash as `0x${string}`);\n        }\n\n        // Contract call\n        if (!functionName) {\n            throw new Error(\"Function name is required for contract calls\");\n        }\n\n        const { request } = await this.viemPublicClient.simulateContract({\n            account: this.wrappedKeyMetadata.wrappedKeyAddress as `0x${string}`,\n            address: toAddress,\n            abi,\n            functionName,\n            args,\n            chain: this.viemWalletClient.chain,\n            value,\n        });\n\n        // Uses the viem wallet client to send the transaction\n        const txHash = await this.viemWalletClient.writeContract(request);\n        return this.waitForReceipt(txHash);\n    }\n\n    async read(request: EVMReadRequest): Promise<EVMReadResult> {\n        const { address, abi, functionName, args } = request;\n        if (!abi) throw new Error(\"Read request must include ABI for EVM\");\n\n        const result = await this.viemPublicClient.readContract({\n            address: await this.resolveAddress(address),\n            abi,\n            functionName,\n            args,\n        });\n\n        return { value: result };\n    }\n\n    async balanceOf(address: string) {\n        const resolvedAddress = await this.resolveAddress(address);\n        const balance = await this.viemPublicClient.getBalance({\n            address: resolvedAddress,\n        });\n\n        const chain = this.viemWalletClient.chain ?? mainnet;\n\n        return {\n            value: formatUnits(balance, chain.nativeCurrency.decimals),\n            decimals: chain.nativeCurrency.decimals,\n            symbol: chain.nativeCurrency.symbol,\n            name: chain.nativeCurrency.name,\n            inBaseUnits: balance.toString(),\n        };\n    }\n}\n\nexport function createEVMWallet(options: LitEVMWalletOptions) {\n    return new LitEVMWalletClient(options);\n}\n"]}
+\ No newline at end of file
+diff --git a/dist/chunk-4YJQPFEM.js b/dist/chunk-4YJQPFEM.js
+deleted file mode 100644
+index e010c96a2d2ce5b3fc6c29c5ee9515cb327dd128..0000000000000000000000000000000000000000
+diff --git a/dist/chunk-7QVYU63E.js b/dist/chunk-7QVYU63E.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..b3005259dee2a06924ed10b4c6cbe61cd416aee5
+--- /dev/null
++++ b/dist/chunk-7QVYU63E.js
+@@ -0,0 +1,7 @@
++"use strict";Object.defineProperty(exports, "__esModule", {value: true});var __defProp = Object.defineProperty;
++var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
++
++
++
++exports.__name = __name;
++//# sourceMappingURL=chunk-7QVYU63E.js.map
+\ No newline at end of file
+diff --git a/dist/chunk-7QVYU63E.js.map b/dist/chunk-7QVYU63E.js.map
+new file mode 100644
+index 0000000000000000000000000000000000000000..c9b7be737c68c4ff3f30ee7aa462c3e850f299c0
+--- /dev/null
++++ b/dist/chunk-7QVYU63E.js.map
+@@ -0,0 +1 @@
++{"version":3,"sources":["/Users/evzhen/workspace/goat/typescript/packages/wallets/lit-protocol/dist/chunk-7QVYU63E.js"],"names":[],"mappings":"AAAA,6EAAI,UAAU,EAAE,MAAM,CAAC,cAAc;AACrC,IAAI,OAAO,EAAE,CAAC,MAAM,EAAE,KAAK,EAAE,GAAG,SAAS,CAAC,MAAM,EAAE,MAAM,EAAE,EAAE,KAAK,EAAE,YAAY,EAAE,KAAK,CAAC,CAAC;AACxF;AACA;AACE;AACF,wBAAC","file":"/Users/evzhen/workspace/goat/typescript/packages/wallets/lit-protocol/dist/chunk-7QVYU63E.js"}
+\ No newline at end of file
+diff --git a/dist/chunk-CGD4LFGX.mjs b/dist/chunk-CGD4LFGX.mjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..fb53b9b48e9b7494634e8ee485597e27f66ea315
+--- /dev/null
++++ b/dist/chunk-CGD4LFGX.mjs
+@@ -0,0 +1,108 @@
++import {
++  __name
++} from "./chunk-PAWJFY3S.mjs";
++
++// src/solana.ts
++import { api } from "@lit-protocol/wrapped-keys";
++import { PublicKey, Transaction } from "@solana/web3.js";
++import { SolanaWalletClient } from "@goat-sdk/wallet-solana";
++import { formatUnits } from "viem";
++var { signMessageWithEncryptedKey, signTransactionWithEncryptedKey } = api;
++var LitSolanaWallet = class extends SolanaWalletClient {
++  static {
++    __name(this, "LitSolanaWallet");
++  }
++  litNodeClient;
++  pkpSessionSigs;
++  wrappedKeyMetadata;
++  chain;
++  constructor(options) {
++    super({
++      connection: options.connection
++    });
++    const { litNodeClient, pkpSessionSigs, wrappedKeyMetadata, chain } = options;
++    this.litNodeClient = litNodeClient;
++    this.pkpSessionSigs = pkpSessionSigs;
++    this.wrappedKeyMetadata = wrappedKeyMetadata;
++    this.chain = chain;
++  }
++  getAddress() {
++    return this.wrappedKeyMetadata.publicKey;
++  }
++  async signMessage(message) {
++    const signature = await signMessageWithEncryptedKey({
++      pkpSessionSigs: this.pkpSessionSigs,
++      network: "solana",
++      id: this.wrappedKeyMetadata.id,
++      messageToSign: message,
++      litNodeClient: this.litNodeClient
++    });
++    return {
++      signature
++    };
++  }
++  async sendTransaction({ instructions }) {
++    const latestBlockhash = await this.connection.getLatestBlockhash("confirmed");
++    const tx = new Transaction();
++    tx.recentBlockhash = latestBlockhash.blockhash;
++    tx.feePayer = new PublicKey(this.wrappedKeyMetadata.publicKey);
++    tx.add(...instructions);
++    const serializedTransaction = tx.serialize({
++      requireAllSignatures: false,
++      verifySignatures: false
++    }).toString("base64");
++    const litTransaction = {
++      serializedTransaction,
++      chain: this.chain
++    };
++    const signedTransaction = await signTransactionWithEncryptedKey({
++      litNodeClient: this.litNodeClient,
++      pkpSessionSigs: this.pkpSessionSigs,
++      network: "solana",
++      id: this.wrappedKeyMetadata.id,
++      unsignedTransaction: litTransaction,
++      broadcast: true
++    });
++    return {
++      hash: signedTransaction
++    };
++  }
++  async sendRawTransaction(transaction) {
++    const litTransaction = {
++      serializedTransaction: transaction,
++      chain: this.chain
++    };
++    const signedTransaction = await signTransactionWithEncryptedKey({
++      litNodeClient: this.litNodeClient,
++      pkpSessionSigs: this.pkpSessionSigs,
++      network: "solana",
++      id: this.wrappedKeyMetadata.id,
++      unsignedTransaction: litTransaction,
++      broadcast: true
++    });
++    return {
++      hash: signedTransaction
++    };
++  }
++  async balanceOf(address) {
++    const pubkey = new PublicKey(address);
++    const balance = await this.connection.getBalance(pubkey);
++    return {
++      decimals: 9,
++      symbol: "SOL",
++      name: "Solana",
++      value: formatUnits(BigInt(balance), 9),
++      inBaseUnits: balance.toString()
++    };
++  }
++};
++function createSolanaWallet(options) {
++  return new LitSolanaWallet(options);
++}
++__name(createSolanaWallet, "createSolanaWallet");
++
++export {
++  LitSolanaWallet,
++  createSolanaWallet
++};
++//# sourceMappingURL=chunk-CGD4LFGX.mjs.map
+\ No newline at end of file
+diff --git a/dist/chunk-CGD4LFGX.mjs.map b/dist/chunk-CGD4LFGX.mjs.map
+new file mode 100644
+index 0000000000000000000000000000000000000000..bc9ff0e0e3b729abccb775aace86c7f9b55205ed
+--- /dev/null
++++ b/dist/chunk-CGD4LFGX.mjs.map
+@@ -0,0 +1 @@
++{"version":3,"sources":["../src/solana.ts"],"sourcesContent":["import { LitNodeClient } from \"@lit-protocol/lit-node-client\";\nimport type { SessionSigsMap } from \"@lit-protocol/types\";\nimport { StoredKeyData, api } from \"@lit-protocol/wrapped-keys\";\nimport { PublicKey, Transaction } from \"@solana/web3.js\";\n\nimport { type SolanaTransaction, SolanaWalletClient } from \"@goat-sdk/wallet-solana\";\nimport { formatUnits } from \"viem\";\nimport type { LitSolanaWalletOptions } from \"./types\";\n\nconst { signMessageWithEncryptedKey, signTransactionWithEncryptedKey } = api;\n\nexport class LitSolanaWallet extends SolanaWalletClient {\n    private litNodeClient: LitNodeClient;\n    private pkpSessionSigs: SessionSigsMap;\n    private wrappedKeyMetadata: StoredKeyData & { wrappedKeyAddress: string };\n    private chain: \"devnet\" | \"mainnet-beta\" | \"testnet\";\n\n    constructor(options: LitSolanaWalletOptions) {\n        super({ connection: options.connection });\n        const { litNodeClient, pkpSessionSigs, wrappedKeyMetadata, chain } = options;\n        this.litNodeClient = litNodeClient;\n        this.pkpSessionSigs = pkpSessionSigs;\n        this.wrappedKeyMetadata = wrappedKeyMetadata;\n        this.chain = chain;\n    }\n\n    getAddress(): string {\n        return this.wrappedKeyMetadata.publicKey;\n    }\n\n    async signMessage(message: string): Promise<{ signature: string }> {\n        const signature = await signMessageWithEncryptedKey({\n            pkpSessionSigs: this.pkpSessionSigs,\n            network: \"solana\",\n            id: this.wrappedKeyMetadata.id,\n            messageToSign: message,\n            litNodeClient: this.litNodeClient,\n        });\n\n        return { signature };\n    }\n\n    async sendTransaction({ instructions }: SolanaTransaction): Promise<{ hash: string }> {\n        const latestBlockhash = await this.connection.getLatestBlockhash(\"confirmed\");\n        const tx = new Transaction();\n        tx.recentBlockhash = latestBlockhash.blockhash;\n        tx.feePayer = new PublicKey(this.wrappedKeyMetadata.publicKey);\n        tx.add(...instructions);\n\n        const serializedTransaction = tx\n            .serialize({\n                requireAllSignatures: false,\n                verifySignatures: false,\n            })\n            .toString(\"base64\");\n\n        const litTransaction = {\n            serializedTransaction,\n            chain: this.chain,\n        };\n\n        const signedTransaction = await signTransactionWithEncryptedKey({\n            litNodeClient: this.litNodeClient,\n            pkpSessionSigs: this.pkpSessionSigs,\n            network: \"solana\",\n            id: this.wrappedKeyMetadata.id,\n            unsignedTransaction: litTransaction,\n            broadcast: true,\n        });\n\n        return {\n            hash: signedTransaction,\n        };\n    }\n\n    async sendRawTransaction(transaction: string): Promise<{ hash: string }> {\n        const litTransaction = {\n            serializedTransaction: transaction,\n            chain: this.chain,\n        };\n\n        const signedTransaction = await signTransactionWithEncryptedKey({\n            litNodeClient: this.litNodeClient,\n            pkpSessionSigs: this.pkpSessionSigs,\n            network: \"solana\",\n            id: this.wrappedKeyMetadata.id,\n            unsignedTransaction: litTransaction,\n            broadcast: true,\n        });\n\n        return {\n            hash: signedTransaction,\n        };\n    }\n\n    async balanceOf(address: string) {\n        const pubkey = new PublicKey(address);\n        const balance = await this.connection.getBalance(pubkey);\n\n        return {\n            decimals: 9,\n            symbol: \"SOL\",\n            name: \"Solana\",\n            value: formatUnits(BigInt(balance), 9),\n            inBaseUnits: balance.toString(),\n        };\n    }\n}\n\nexport function createSolanaWallet(options: LitSolanaWalletOptions) {\n    return new LitSolanaWallet(options);\n}\n"],"mappings":";;;;;AAEA,SAAwBA,WAAW;AACnC,SAASC,WAAWC,mBAAmB;AAEvC,SAAiCC,0BAA0B;AAC3D,SAASC,mBAAmB;AAG5B,IAAM,EAAEC,6BAA6BC,gCAA+B,IAAKC;AAElE,IAAMC,kBAAN,cAA8BC,mBAAAA;EATrC,OASqCA;;;EACzBC;EACAC;EACAC;EACAC;EAERC,YAAYC,SAAiC;AACzC,UAAM;MAAEC,YAAYD,QAAQC;IAAW,CAAA;AACvC,UAAM,EAAEN,eAAeC,gBAAgBC,oBAAoBC,MAAK,IAAKE;AACrE,SAAKL,gBAAgBA;AACrB,SAAKC,iBAAiBA;AACtB,SAAKC,qBAAqBA;AAC1B,SAAKC,QAAQA;EACjB;EAEAI,aAAqB;AACjB,WAAO,KAAKL,mBAAmBM;EACnC;EAEA,MAAMC,YAAYC,SAAiD;AAC/D,UAAMC,YAAY,MAAMhB,4BAA4B;MAChDM,gBAAgB,KAAKA;MACrBW,SAAS;MACTC,IAAI,KAAKX,mBAAmBW;MAC5BC,eAAeJ;MACfV,eAAe,KAAKA;IACxB,CAAA;AAEA,WAAO;MAAEW;IAAU;EACvB;EAEA,MAAMI,gBAAgB,EAAEC,aAAY,GAAkD;AAClF,UAAMC,kBAAkB,MAAM,KAAKX,WAAWY,mBAAmB,WAAA;AACjE,UAAMC,KAAK,IAAIC,YAAAA;AACfD,OAAGE,kBAAkBJ,gBAAgBK;AACrCH,OAAGI,WAAW,IAAIC,UAAU,KAAKtB,mBAAmBM,SAAS;AAC7DW,OAAGM,IAAG,GAAIT,YAAAA;AAEV,UAAMU,wBAAwBP,GACzBQ,UAAU;MACPC,sBAAsB;MACtBC,kBAAkB;IACtB,CAAA,EACCC,SAAS,QAAA;AAEd,UAAMC,iBAAiB;MACnBL;MACAvB,OAAO,KAAKA;IAChB;AAEA,UAAM6B,oBAAoB,MAAMpC,gCAAgC;MAC5DI,eAAe,KAAKA;MACpBC,gBAAgB,KAAKA;MACrBW,SAAS;MACTC,IAAI,KAAKX,mBAAmBW;MAC5BoB,qBAAqBF;MACrBG,WAAW;IACf,CAAA;AAEA,WAAO;MACHC,MAAMH;IACV;EACJ;EAEA,MAAMI,mBAAmBC,aAAgD;AACrE,UAAMN,iBAAiB;MACnBL,uBAAuBW;MACvBlC,OAAO,KAAKA;IAChB;AAEA,UAAM6B,oBAAoB,MAAMpC,gCAAgC;MAC5DI,eAAe,KAAKA;MACpBC,gBAAgB,KAAKA;MACrBW,SAAS;MACTC,IAAI,KAAKX,mBAAmBW;MAC5BoB,qBAAqBF;MACrBG,WAAW;IACf,CAAA;AAEA,WAAO;MACHC,MAAMH;IACV;EACJ;EAEA,MAAMM,UAAUC,SAAiB;AAC7B,UAAMC,SAAS,IAAIhB,UAAUe,OAAAA;AAC7B,UAAME,UAAU,MAAM,KAAKnC,WAAWoC,WAAWF,MAAAA;AAEjD,WAAO;MACHG,UAAU;MACVC,QAAQ;MACRC,MAAM;MACNC,OAAOC,YAAYC,OAAOP,OAAAA,GAAU,CAAA;MACpCQ,aAAaR,QAAQX,SAAQ;IACjC;EACJ;AACJ;AAEO,SAASoB,mBAAmB7C,SAA+B;AAC9D,SAAO,IAAIP,gBAAgBO,OAAAA;AAC/B;AAFgB6C;","names":["api","PublicKey","Transaction","SolanaWalletClient","formatUnits","signMessageWithEncryptedKey","signTransactionWithEncryptedKey","api","LitSolanaWallet","SolanaWalletClient","litNodeClient","pkpSessionSigs","wrappedKeyMetadata","chain","constructor","options","connection","getAddress","publicKey","signMessage","message","signature","network","id","messageToSign","sendTransaction","instructions","latestBlockhash","getLatestBlockhash","tx","Transaction","recentBlockhash","blockhash","feePayer","PublicKey","add","serializedTransaction","serialize","requireAllSignatures","verifySignatures","toString","litTransaction","signedTransaction","unsignedTransaction","broadcast","hash","sendRawTransaction","transaction","balanceOf","address","pubkey","balance","getBalance","decimals","symbol","name","value","formatUnits","BigInt","inBaseUnits","createSolanaWallet"]}
+\ No newline at end of file
+diff --git a/dist/chunk-EI7MMDWY.js b/dist/chunk-EI7MMDWY.js
+deleted file mode 100644
+index e4b42210c49b184e4a965078f64e5cfe811e75ab..0000000000000000000000000000000000000000
+diff --git a/dist/chunk-Z2QG4O5M.mjs b/dist/chunk-F4SFALW3.js
+similarity index 85%
+rename from dist/chunk-Z2QG4O5M.mjs
+rename to dist/chunk-F4SFALW3.js
+index 62f0144b7c260fbd738d0f15ac41a11af98f05f7..126a77c7879660730c8dc6b742ffd0af2ff6d2e5 100644
+--- a/dist/chunk-Z2QG4O5M.mjs
++++ b/dist/chunk-F4SFALW3.js
+@@ -1,4 +1,5 @@
+-var r=`
++"use strict";Object.defineProperty(exports, "__esModule", {value: true});// src/litActions/evmWrappedKeySignEip712Message.ts
++var signEip712MessageLitActionCode = `
+ const LIT_PREFIX = "lit_";
+ 
+ async function getDecryptedKeyToSingleNode({
+@@ -61,4 +62,9 @@ async function signMessageEthereumKey({ privateKey, messageToSign }) {
+     Lit.Actions.setResponse({ response: \`Error: \${err.message}\` });
+   }
+ })();
+-`;export{r as a};
++`;
++
++
++
++exports.signEip712MessageLitActionCode = signEip712MessageLitActionCode;
++//# sourceMappingURL=chunk-F4SFALW3.js.map
+\ No newline at end of file
+diff --git a/dist/chunk-F4SFALW3.js.map b/dist/chunk-F4SFALW3.js.map
+new file mode 100644
+index 0000000000000000000000000000000000000000..dfd88e1989c6c1c7da6d69380405642474be5656
+--- /dev/null
++++ b/dist/chunk-F4SFALW3.js.map
+@@ -0,0 +1 @@
++{"version":3,"sources":["/Users/evzhen/workspace/goat/typescript/packages/wallets/lit-protocol/dist/chunk-F4SFALW3.js","../src/litActions/evmWrappedKeySignEip712Message.ts"],"names":["signEip712MessageLitActionCode"],"mappings":"AAAA;ACWO,IAAMA,+BAAAA,EAAiC,CAAA;ADT9C;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA,CAAC;AACD;AACA;AACE;AACF,wEAAC","file":"/Users/evzhen/workspace/goat/typescript/packages/wallets/lit-protocol/dist/chunk-F4SFALW3.js","sourcesContent":[null,"/**\n * Signs a message with the Ethers wallet which is also decrypted inside the Lit Action.\n *\n * @jsParam pkpAddress - The Eth address of the PKP which is associated with the Wrapped Key\n * @jsParam ciphertext - For the encrypted Wrapped Key\n * @jsParam dataToEncryptHash - For the encrypted Wrapped Key\n * @jsParam messageToSign - The unsigned message to be signed by the Wrapped Key\n * @jsParam accessControlConditions - The access control condition that allows only the pkpAddress to decrypt the Wrapped Key\n *\n * @returns { Promise<string> } - Returns a message signed by the Ethers Wrapped key. Or returns errors if any.\n */\nexport const signEip712MessageLitActionCode = `\nconst LIT_PREFIX = \"lit_\";\n\nasync function getDecryptedKeyToSingleNode({\n  accessControlConditions,\n  ciphertext,\n  dataToEncryptHash,\n}) {\n  try {\n    // May be undefined, since we're using \\`decryptToSingleNode\\`\n    return await Lit.Actions.decryptToSingleNode({\n      accessControlConditions,\n      ciphertext,\n      dataToEncryptHash,\n      chain: \"ethereum\",\n      authSig: null,\n    });\n  } catch (err) {\n    throw new Error(\\`When decrypting key to a single node - \\${err.message}\\`);\n  }\n}\n\nfunction removeSaltFromDecryptedKey(decryptedPrivateKey) {\n  if (!decryptedPrivateKey.startsWith(LIT_PREFIX)) {\n    throw new Error(\n      \\`PKey was not encrypted with salt; all wrapped keys must be prefixed with '\\${LIT_PREFIX}'\\`\n    );\n  }\n\n  return decryptedPrivateKey.slice(LIT_PREFIX.length);\n}\n\nasync function signMessageEthereumKey({ privateKey, messageToSign }) {\n  const wallet = new ethers.Wallet(privateKey);\n  const { domain, types, message } = JSON.parse(messageToSign);\n  return wallet._signTypedData(domain, types, message);\n}\n\n(async () => {\n  try {\n    const decryptedPrivateKey = await getDecryptedKeyToSingleNode({\n      accessControlConditions,\n      ciphertext,\n      dataToEncryptHash,\n    });\n\n    if (!decryptedPrivateKey) {\n      // Silently exit on nodes which didn't run the \\`decryptToSingleNode\\` code\n      return;\n    }\n\n    const privateKey = removeSaltFromDecryptedKey(decryptedPrivateKey);\n\n    let signature = await signMessageEthereumKey({\n      privateKey,\n      messageToSign,\n    });\n\n    Lit.Actions.setResponse({ response: signature });\n  } catch (err) {\n    Lit.Actions.setResponse({ response: \\`Error: \\${err.message}\\` });\n  }\n})();\n`;\n"]}
+\ No newline at end of file
+diff --git a/dist/chunk-FVXLXUD6.mjs b/dist/chunk-FVXLXUD6.mjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..446b192ccec7cde7ad12338bd617f0ee0924f347
+--- /dev/null
++++ b/dist/chunk-FVXLXUD6.mjs
+@@ -0,0 +1,189 @@
++import {
++  signEip712MessageLitActionCode
++} from "./chunk-MASWBLX5.mjs";
++import {
++  __name
++} from "./chunk-PAWJFY3S.mjs";
++
++// src/evm.ts
++import { api } from "@lit-protocol/wrapped-keys";
++import { formatEther, formatUnits, isAddress, publicActions } from "viem";
++import { mainnet } from "viem/chains";
++import { normalize } from "viem/ens";
++import { EVMWalletClient } from "@goat-sdk/wallet-evm";
++var { signMessageWithEncryptedKey, signTransactionWithEncryptedKey } = api;
++var LitEVMWalletClient = class extends EVMWalletClient {
++  static {
++    __name(this, "LitEVMWalletClient");
++  }
++  options;
++  litNodeClient;
++  pkpSessionSigs;
++  wrappedKeyMetadata;
++  chainId;
++  litEVMChainIdentifier;
++  viemWalletClient;
++  get viemPublicClient() {
++    return this.viemWalletClient.extend(publicActions);
++  }
++  constructor(options) {
++    super(), this.options = options;
++    this.litNodeClient = options.litNodeClient;
++    this.pkpSessionSigs = options.pkpSessionSigs;
++    this.wrappedKeyMetadata = options.wrappedKeyMetadata;
++    this.chainId = options.chainId;
++    this.litEVMChainIdentifier = options.litEVMChainIdentifier;
++    this.viemWalletClient = options.viemWalletClient;
++  }
++  getPkpAccessControlCondition(pkpAddress) {
++    if (!isAddress(pkpAddress)) {
++      throw new Error(`pkpAddress is not a valid Ethereum Address: ${pkpAddress}`);
++    }
++    return {
++      contractAddress: "",
++      standardContractType: "",
++      chain: "ethereum",
++      method: "",
++      parameters: [
++        ":userAddress"
++      ],
++      returnValueTest: {
++        comparator: "=",
++        value: pkpAddress
++      }
++    };
++  }
++  async resolveAddress(address) {
++    if (/^0x[a-fA-F0-9]{40}$/.test(address)) return address;
++    try {
++      const resolvedAddress = await this.viemPublicClient.getEnsAddress({
++        name: normalize(address)
++      });
++      if (!resolvedAddress) {
++        throw new Error("ENS name could not be resolved.");
++      }
++      return resolvedAddress;
++    } catch (error) {
++      throw new Error(`Failed to resolve ENS name: ${error}`);
++    }
++  }
++  async waitForReceipt(hash) {
++    const receipt = await this.viemPublicClient.waitForTransactionReceipt({
++      hash
++    });
++    return {
++      hash: receipt.transactionHash,
++      status: receipt.status ? "success" : "failure"
++    };
++  }
++  getAddress() {
++    return this.wrappedKeyMetadata.wrappedKeyAddress;
++  }
++  getChain() {
++    return {
++      type: "evm",
++      id: this.options.chainId ?? 0
++    };
++  }
++  async signMessage(message) {
++    const signature = await signMessageWithEncryptedKey({
++      pkpSessionSigs: this.pkpSessionSigs,
++      network: "evm",
++      id: this.wrappedKeyMetadata.id,
++      messageToSign: message,
++      litNodeClient: this.litNodeClient
++    });
++    return {
++      signature
++    };
++  }
++  async signTypedData(data) {
++    const response = await this.litNodeClient.executeJs({
++      sessionSigs: this.pkpSessionSigs,
++      code: signEip712MessageLitActionCode,
++      jsParams: {
++        accessControlConditions: [
++          this.getPkpAccessControlCondition(this.wrappedKeyMetadata.pkpAddress)
++        ],
++        ciphertext: this.wrappedKeyMetadata.ciphertext,
++        dataToEncryptHash: this.wrappedKeyMetadata.dataToEncryptHash,
++        messageToSign: JSON.stringify(data)
++      }
++    });
++    return {
++      signature: response.response
++    };
++  }
++  async sendTransaction(transaction) {
++    const { to, abi, functionName, args, value } = transaction;
++    const toAddress = await this.resolveAddress(to);
++    if (!abi) {
++      const litTransaction = {
++        chainId: this.chainId,
++        chain: this.litEVMChainIdentifier,
++        toAddress,
++        value: formatEther(value ?? 0n)
++      };
++      const txHash2 = await signTransactionWithEncryptedKey({
++        litNodeClient: this.litNodeClient,
++        pkpSessionSigs: this.pkpSessionSigs,
++        network: "evm",
++        id: this.wrappedKeyMetadata.id,
++        unsignedTransaction: litTransaction,
++        broadcast: true
++      });
++      return this.waitForReceipt(txHash2);
++    }
++    if (!functionName) {
++      throw new Error("Function name is required for contract calls");
++    }
++    const { request } = await this.viemPublicClient.simulateContract({
++      account: this.wrappedKeyMetadata.wrappedKeyAddress,
++      address: toAddress,
++      abi,
++      functionName,
++      args,
++      chain: this.viemWalletClient.chain,
++      value
++    });
++    const txHash = await this.viemWalletClient.writeContract(request);
++    return this.waitForReceipt(txHash);
++  }
++  async read(request) {
++    const { address, abi, functionName, args } = request;
++    if (!abi) throw new Error("Read request must include ABI for EVM");
++    const result = await this.viemPublicClient.readContract({
++      address: await this.resolveAddress(address),
++      abi,
++      functionName,
++      args
++    });
++    return {
++      value: result
++    };
++  }
++  async balanceOf(address) {
++    const resolvedAddress = await this.resolveAddress(address);
++    const balance = await this.viemPublicClient.getBalance({
++      address: resolvedAddress
++    });
++    const chain = this.viemWalletClient.chain ?? mainnet;
++    return {
++      value: formatUnits(balance, chain.nativeCurrency.decimals),
++      decimals: chain.nativeCurrency.decimals,
++      symbol: chain.nativeCurrency.symbol,
++      name: chain.nativeCurrency.name,
++      inBaseUnits: balance.toString()
++    };
++  }
++};
++function createEVMWallet(options) {
++  return new LitEVMWalletClient(options);
++}
++__name(createEVMWallet, "createEVMWallet");
++
++export {
++  LitEVMWalletClient,
++  createEVMWallet
++};
++//# sourceMappingURL=chunk-FVXLXUD6.mjs.map
+\ No newline at end of file
+diff --git a/dist/chunk-FVXLXUD6.mjs.map b/dist/chunk-FVXLXUD6.mjs.map
+new file mode 100644
+index 0000000000000000000000000000000000000000..485da3b58d61a53a81106ed159da29df27fc1b0b
+--- /dev/null
++++ b/dist/chunk-FVXLXUD6.mjs.map
+@@ -0,0 +1 @@
++{"version":3,"sources":["../src/evm.ts"],"sourcesContent":["import type { EVMReadRequest, EVMReadResult, EVMTransaction, EVMTypedData } from \"@goat-sdk/wallet-evm\";\nimport type { AccsDefaultParams, SessionSigsMap } from \"@lit-protocol/types\";\nimport { type EthereumLitTransaction, StoredKeyData, api } from \"@lit-protocol/wrapped-keys\";\nimport { formatEther, formatUnits, isAddress, publicActions } from \"viem\";\nimport { mainnet } from \"viem/chains\";\nimport { normalize } from \"viem/ens\";\nimport { signEip712MessageLitActionCode } from \"./litActions/evmWrappedKeySignEip712Message\";\nimport type { LitEVMWalletOptions } from \"./types\";\n\nimport { type EvmChain, type Signature } from \"@goat-sdk/core\";\nimport { EVMWalletClient } from \"@goat-sdk/wallet-evm\";\nimport { LitNodeClient } from \"@lit-protocol/lit-node-client\";\n\nimport { WalletClient as ViemWalletClient } from \"viem\";\n\nconst { signMessageWithEncryptedKey, signTransactionWithEncryptedKey } = api;\n\nexport class LitEVMWalletClient extends EVMWalletClient {\n    private litNodeClient: LitNodeClient;\n    private pkpSessionSigs: SessionSigsMap;\n    private wrappedKeyMetadata: StoredKeyData & { wrappedKeyAddress: string };\n    private chainId: number;\n    private litEVMChainIdentifier: string;\n    private viemWalletClient: ViemWalletClient;\n\n    private get viemPublicClient() {\n        return this.viemWalletClient.extend(publicActions);\n    }\n\n    constructor(private options: LitEVMWalletOptions) {\n        super();\n        this.litNodeClient = options.litNodeClient;\n        this.pkpSessionSigs = options.pkpSessionSigs;\n        this.wrappedKeyMetadata = options.wrappedKeyMetadata;\n        this.chainId = options.chainId;\n        this.litEVMChainIdentifier = options.litEVMChainIdentifier;\n        this.viemWalletClient = options.viemWalletClient;\n    }\n\n    private getPkpAccessControlCondition(pkpAddress: string): AccsDefaultParams {\n        if (!isAddress(pkpAddress)) {\n            throw new Error(`pkpAddress is not a valid Ethereum Address: ${pkpAddress}`);\n        }\n\n        return {\n            contractAddress: \"\",\n            standardContractType: \"\",\n            chain: \"ethereum\",\n            method: \"\",\n            parameters: [\":userAddress\"],\n            returnValueTest: {\n                comparator: \"=\",\n                value: pkpAddress,\n            },\n        };\n    }\n\n    async resolveAddress(address: string): Promise<`0x${string}`> {\n        if (/^0x[a-fA-F0-9]{40}$/.test(address)) return address as `0x${string}`;\n\n        try {\n            const resolvedAddress = (await this.viemPublicClient.getEnsAddress({\n                name: normalize(address),\n            })) as `0x${string}`;\n            if (!resolvedAddress) {\n                throw new Error(\"ENS name could not be resolved.\");\n            }\n            return resolvedAddress;\n        } catch (error) {\n            throw new Error(`Failed to resolve ENS name: ${error}`);\n        }\n    }\n\n    private async waitForReceipt(hash: `0x${string}`): Promise<{ hash: string; status: string }> {\n        const receipt = await this.viemPublicClient.waitForTransactionReceipt({\n            hash,\n        });\n        return {\n            hash: receipt.transactionHash,\n            status: receipt.status ? \"success\" : \"failure\",\n        };\n    }\n\n    getAddress(): string {\n        return this.wrappedKeyMetadata.wrappedKeyAddress;\n    }\n\n    getChain(): EvmChain {\n        return {\n            type: \"evm\" as const,\n            id: this.options.chainId ?? 0,\n        };\n    }\n\n    async signMessage(message: string): Promise<Signature> {\n        const signature = await signMessageWithEncryptedKey({\n            pkpSessionSigs: this.pkpSessionSigs,\n            network: \"evm\",\n            id: this.wrappedKeyMetadata.id,\n            messageToSign: message,\n            litNodeClient: this.litNodeClient,\n        });\n        return { signature };\n    }\n\n    async signTypedData(data: EVMTypedData): Promise<Signature> {\n        const response = await this.litNodeClient.executeJs({\n            sessionSigs: this.pkpSessionSigs,\n            code: signEip712MessageLitActionCode,\n            jsParams: {\n                accessControlConditions: [this.getPkpAccessControlCondition(this.wrappedKeyMetadata.pkpAddress)],\n                ciphertext: this.wrappedKeyMetadata.ciphertext,\n                dataToEncryptHash: this.wrappedKeyMetadata.dataToEncryptHash,\n                messageToSign: JSON.stringify(data),\n            },\n        });\n\n        return {\n            signature: response.response as string,\n        };\n    }\n\n    async sendTransaction(transaction: EVMTransaction): Promise<{ hash: string }> {\n        const { to, abi, functionName, args, value } = transaction;\n        const toAddress = await this.resolveAddress(to);\n\n        // Simple ETH transfer (no ABI)\n        if (!abi) {\n            const litTransaction: EthereumLitTransaction = {\n                chainId: this.chainId,\n                chain: this.litEVMChainIdentifier,\n                toAddress,\n                value: formatEther(value ?? 0n),\n            };\n\n            const txHash = await signTransactionWithEncryptedKey({\n                litNodeClient: this.litNodeClient,\n                pkpSessionSigs: this.pkpSessionSigs,\n                network: \"evm\",\n                id: this.wrappedKeyMetadata.id,\n                unsignedTransaction: litTransaction,\n                broadcast: true,\n            });\n            return this.waitForReceipt(txHash as `0x${string}`);\n        }\n\n        // Contract call\n        if (!functionName) {\n            throw new Error(\"Function name is required for contract calls\");\n        }\n\n        const { request } = await this.viemPublicClient.simulateContract({\n            account: this.wrappedKeyMetadata.wrappedKeyAddress as `0x${string}`,\n            address: toAddress,\n            abi,\n            functionName,\n            args,\n            chain: this.viemWalletClient.chain,\n            value,\n        });\n\n        // Uses the viem wallet client to send the transaction\n        const txHash = await this.viemWalletClient.writeContract(request);\n        return this.waitForReceipt(txHash);\n    }\n\n    async read(request: EVMReadRequest): Promise<EVMReadResult> {\n        const { address, abi, functionName, args } = request;\n        if (!abi) throw new Error(\"Read request must include ABI for EVM\");\n\n        const result = await this.viemPublicClient.readContract({\n            address: await this.resolveAddress(address),\n            abi,\n            functionName,\n            args,\n        });\n\n        return { value: result };\n    }\n\n    async balanceOf(address: string) {\n        const resolvedAddress = await this.resolveAddress(address);\n        const balance = await this.viemPublicClient.getBalance({\n            address: resolvedAddress,\n        });\n\n        const chain = this.viemWalletClient.chain ?? mainnet;\n\n        return {\n            value: formatUnits(balance, chain.nativeCurrency.decimals),\n            decimals: chain.nativeCurrency.decimals,\n            symbol: chain.nativeCurrency.symbol,\n            name: chain.nativeCurrency.name,\n            inBaseUnits: balance.toString(),\n        };\n    }\n}\n\nexport function createEVMWallet(options: LitEVMWalletOptions) {\n    return new LitEVMWalletClient(options);\n}\n"],"mappings":"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","names":["api","formatEther","formatUnits","isAddress","publicActions","mainnet","normalize","EVMWalletClient","signMessageWithEncryptedKey","signTransactionWithEncryptedKey","api","LitEVMWalletClient","EVMWalletClient","litNodeClient","pkpSessionSigs","wrappedKeyMetadata","chainId","litEVMChainIdentifier","viemWalletClient","viemPublicClient","extend","publicActions","constructor","options","getPkpAccessControlCondition","pkpAddress","isAddress","Error","contractAddress","standardContractType","chain","method","parameters","returnValueTest","comparator","value","resolveAddress","address","test","resolvedAddress","getEnsAddress","name","normalize","error","waitForReceipt","hash","receipt","waitForTransactionReceipt","transactionHash","status","getAddress","wrappedKeyAddress","getChain","type","id","signMessage","message","signature","network","messageToSign","signTypedData","data","response","executeJs","sessionSigs","code","signEip712MessageLitActionCode","jsParams","accessControlConditions","ciphertext","dataToEncryptHash","JSON","stringify","sendTransaction","transaction","to","abi","functionName","args","toAddress","litTransaction","formatEther","txHash","unsignedTransaction","broadcast","request","simulateContract","account","writeContract","read","result","readContract","balanceOf","balance","getBalance","mainnet","formatUnits","nativeCurrency","decimals","symbol","inBaseUnits","toString","createEVMWallet"]}
+\ No newline at end of file
+diff --git a/dist/chunk-IOT65MS5.js b/dist/chunk-IOT65MS5.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..c448668140cc8ce0100756ab9c40d34ec219a8c0
+--- /dev/null
++++ b/dist/chunk-IOT65MS5.js
+@@ -0,0 +1,120 @@
++"use strict";Object.defineProperty(exports, "__esModule", {value: true}); function _nullishCoalesce(lhs, rhsFn) { if (lhs != null) { return lhs; } else { return rhsFn(); } }
++
++var _chunk7QVYU63Ejs = require('./chunk-7QVYU63E.js');
++
++// src/setup/index.ts
++var _authhelpers = require('@lit-protocol/auth-helpers');
++var _constants = require('@lit-protocol/constants');
++var _contractssdk = require('@lit-protocol/contracts-sdk');
++var _litauthclient = require('@lit-protocol/lit-auth-client');
++var _litnodeclient = require('@lit-protocol/lit-node-client');
++var _wrappedkeys = require('@lit-protocol/wrapped-keys');
++var _ethers = require('ethers');
++var { generatePrivateKey, getEncryptedKey } = _wrappedkeys.api;
++async function createLitNodeClient(network, debug = false) {
++  const litNodeClient = new (0, _litnodeclient.LitNodeClient)({
++    litNetwork: network,
++    debug
++  });
++  await litNodeClient.connect();
++  return litNodeClient;
++}
++_chunk7QVYU63Ejs.__name.call(void 0, createLitNodeClient, "createLitNodeClient");
++async function createLitContractsClient(ethersWallet, network) {
++  const litContractClient = new (0, _contractssdk.LitContracts)({
++    signer: ethersWallet,
++    network
++  });
++  await litContractClient.connect();
++  return litContractClient;
++}
++_chunk7QVYU63Ejs.__name.call(void 0, createLitContractsClient, "createLitContractsClient");
++function createEthersWallet(privateKey) {
++  return new _ethers.ethers.Wallet(privateKey, new _ethers.ethers.providers.JsonRpcProvider(_constants.LIT_RPC.CHRONICLE_YELLOWSTONE));
++}
++_chunk7QVYU63Ejs.__name.call(void 0, createEthersWallet, "createEthersWallet");
++async function mintCapacityCredit(litContractClient, requestsPerSecond, daysUntilUTCMidnightExpiration) {
++  return litContractClient.mintCapacityCreditsNFT({
++    requestsPerSecond,
++    daysUntilUTCMidnightExpiration
++  });
++}
++_chunk7QVYU63Ejs.__name.call(void 0, mintCapacityCredit, "mintCapacityCredit");
++async function createCapacityCreditDelegationAuthSig(litNodeClient, ethersWallet, capacityTokenId, pkpEthAddress) {
++  const { capacityDelegationAuthSig } = await litNodeClient.createCapacityDelegationAuthSig({
++    dAppOwnerWallet: ethersWallet,
++    capacityTokenId,
++    delegateeAddresses: [
++      pkpEthAddress
++    ],
++    uses: "2",
++    expiration: new Date(Date.now() + 1e3 * 60 * 10).toISOString()
++  });
++  return capacityDelegationAuthSig;
++}
++_chunk7QVYU63Ejs.__name.call(void 0, createCapacityCreditDelegationAuthSig, "createCapacityCreditDelegationAuthSig");
++async function mintPKP(litContractClient) {
++  return (await litContractClient.pkpNftContractUtils.write.mint()).pkp;
++}
++_chunk7QVYU63Ejs.__name.call(void 0, mintPKP, "mintPKP");
++async function getPKPSessionSigs(litNodeClient, pkpPublicKey, pkpEthAddress, ethersWallet, capacityTokenId) {
++  return litNodeClient.getPkpSessionSigs({
++    pkpPublicKey,
++    capabilityAuthSigs: [
++      await createCapacityCreditDelegationAuthSig(litNodeClient, ethersWallet, capacityTokenId, pkpEthAddress)
++    ],
++    authMethods: [
++      await _litauthclient.EthWalletProvider.authenticate({
++        signer: ethersWallet,
++        litNodeClient,
++        expiration: new Date(Date.now() + 1e3 * 60 * 10).toISOString()
++      })
++    ],
++    resourceAbilityRequests: [
++      {
++        resource: new (0, _authhelpers.LitPKPResource)("*"),
++        ability: _constants.LIT_ABILITY.PKPSigning
++      },
++      {
++        resource: new (0, _authhelpers.LitActionResource)("*"),
++        ability: _constants.LIT_ABILITY.LitActionExecution
++      }
++    ],
++    expiration: new Date(Date.now() + 1e3 * 60 * 10).toISOString()
++  });
++}
++_chunk7QVYU63Ejs.__name.call(void 0, getPKPSessionSigs, "getPKPSessionSigs");
++async function generateWrappedKey(litNodeClient, pkpSessionSigs, network, memo) {
++  return generatePrivateKey({
++    litNodeClient,
++    pkpSessionSigs,
++    network,
++    memo: _nullishCoalesce(memo, () => ( "This is a wrapped key generated by the Lit Goat Wallet Client"))
++  });
++}
++_chunk7QVYU63Ejs.__name.call(void 0, generateWrappedKey, "generateWrappedKey");
++async function getWrappedKeyMetadata(litNodeClient, pkpSessionSigs, wrappedKeyId) {
++  const keyMetadata = await getEncryptedKey({
++    litNodeClient,
++    pkpSessionSigs,
++    id: wrappedKeyId
++  });
++  return {
++    ...keyMetadata,
++    wrappedKeyAddress: _ethers.ethers.utils.computeAddress(keyMetadata.publicKey)
++  };
++}
++_chunk7QVYU63Ejs.__name.call(void 0, getWrappedKeyMetadata, "getWrappedKeyMetadata");
++
++
++
++
++
++
++
++
++
++
++
++exports.createLitNodeClient = createLitNodeClient; exports.createLitContractsClient = createLitContractsClient; exports.createEthersWallet = createEthersWallet; exports.mintCapacityCredit = mintCapacityCredit; exports.createCapacityCreditDelegationAuthSig = createCapacityCreditDelegationAuthSig; exports.mintPKP = mintPKP; exports.getPKPSessionSigs = getPKPSessionSigs; exports.generateWrappedKey = generateWrappedKey; exports.getWrappedKeyMetadata = getWrappedKeyMetadata;
++//# sourceMappingURL=chunk-IOT65MS5.js.map
+\ No newline at end of file
+diff --git a/dist/chunk-IOT65MS5.js.map b/dist/chunk-IOT65MS5.js.map
+new file mode 100644
+index 0000000000000000000000000000000000000000..135e8d3fe0d812e47ddef3b3f57f34468799269d
+--- /dev/null
++++ b/dist/chunk-IOT65MS5.js.map
+@@ -0,0 +1 @@
++{"version":3,"sources":["/Users/evzhen/workspace/goat/typescript/packages/wallets/lit-protocol/dist/chunk-IOT65MS5.js","../src/setup/index.ts"],"names":["generatePrivateKey","getEncryptedKey","api","createLitNodeClient","network","debug","litNodeClient","LitNodeClient","litNetwork","connect","createLitContractsClient","ethersWallet","litContractClient","LitContracts","signer","createEthersWallet","privateKey","ethers","Wallet","providers","JsonRpcProvider","LIT_RPC","CHRONICLE_YELLOWSTONE","mintCapacityCredit","requestsPerSecond","daysUntilUTCMidnightExpiration","mintCapacityCreditsNFT","createCapacityCreditDelegationAuthSig","capacityTokenId","pkpEthAddress","capacityDelegationAuthSig","createCapacityDelegationAuthSig","dAppOwnerWallet","delegateeAddresses","uses","expiration","Date","now","toISOString","mintPKP","pkpNftContractUtils","write","mint","pkp","getPKPSessionSigs","pkpPublicKey","getPkpSessionSigs","capabilityAuthSigs","authMethods","EthWalletProvider","authenticate","resourceAbilityRequests","resource","LitPKPResource","ability","LIT_ABILITY","PKPSigning","LitActionResource","LitActionExecution","generateWrappedKey","pkpSessionSigs","memo","getWrappedKeyMetadata","wrappedKeyId","keyMetadata","id","wrappedKeyAddress","utils","computeAddress","publicKey"],"mappings":"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","file":"/Users/evzhen/workspace/goat/typescript/packages/wallets/lit-protocol/dist/chunk-IOT65MS5.js","sourcesContent":[null,"import { LitActionResource, LitPKPResource } from \"@lit-protocol/auth-helpers\";\nimport { LIT_ABILITY, type LIT_NETWORK, LIT_RPC } from \"@lit-protocol/constants\";\nimport { LitContracts } from \"@lit-protocol/contracts-sdk\";\nimport { EthWalletProvider } from \"@lit-protocol/lit-auth-client\";\nimport { LitNodeClient } from \"@lit-protocol/lit-node-client\";\nimport type { AuthSig, MintCapacityCreditsRes, SessionSigsMap } from \"@lit-protocol/types\";\nimport { type GeneratePrivateKeyResult, type StoredKeyData, api } from \"@lit-protocol/wrapped-keys\";\nimport { ethers } from \"ethers\";\n\nconst { generatePrivateKey, getEncryptedKey } = api;\n\nexport type LIT_NETWORKS_KEYS = (typeof LIT_NETWORK)[keyof typeof LIT_NETWORK];\n\n/**\n * Creates and initializes a new Lit Protocol node client\n * @param network - The Lit Network to connect to (e.g., 'datil', 'datil-test', 'datil')\n * @param debug - Optional flag to enable debug logging (default: false)\n * @returns Promise resolving to a connected LitNodeClient instance\n * @throws Error if connection fails\n */\nexport async function createLitNodeClient(network: LIT_NETWORKS_KEYS, debug = false): Promise<LitNodeClient> {\n    const litNodeClient = new LitNodeClient({\n        litNetwork: network,\n        debug,\n    });\n    await litNodeClient.connect();\n    return litNodeClient;\n}\n\n/**\n * Creates and connects a Lit Contracts client for interacting with Lit Protocol smart contracts\n * @param ethersWallet - Initialized Ethers wallet instance for signing transactions\n * @param network - The Lit Network to connect to (e.g., 'datil', 'datil-test', 'datil')\n * @returns Promise resolving to a connected LitContracts instance\n * @throws Error if connection fails\n */\nexport async function createLitContractsClient(\n    ethersWallet: ethers.Wallet,\n    network: LIT_NETWORKS_KEYS,\n): Promise<LitContracts> {\n    const litContractClient = new LitContracts({\n        signer: ethersWallet,\n        network,\n    });\n    await litContractClient.connect();\n    return litContractClient;\n}\n\n/**\n * Creates an Ethers wallet instance configured for Lit Protocol\n * @param privateKey - Private key for the wallet (with 0x prefix)\n * @returns Configured Ethers wallet instance connected to Lit RPC\n */\nexport function createEthersWallet(privateKey: string): ethers.Wallet {\n    return new ethers.Wallet(privateKey, new ethers.providers.JsonRpcProvider(LIT_RPC.CHRONICLE_YELLOWSTONE));\n}\n\n/**\n * Mints a new capacity credit NFT for rate limiting\n * @param litContractClient - Connected LitContracts instance\n * @param requestsPerSecond - Number of requests per second allowed\n * @param daysUntilUTCMidnightExpiration - Number of days until the credit expires at UTC midnight (max is 30 days)\n * @returns Promise resolving to minting transaction result with capacity token details\n * @throws Error if minting fails\n */\nexport async function mintCapacityCredit(\n    litContractClient: LitContracts,\n    requestsPerSecond: number,\n    daysUntilUTCMidnightExpiration: number,\n): Promise<MintCapacityCreditsRes> {\n    return litContractClient.mintCapacityCreditsNFT({\n        requestsPerSecond: requestsPerSecond,\n        daysUntilUTCMidnightExpiration: daysUntilUTCMidnightExpiration,\n    });\n}\n\n/**\n * Creates an authentication signature for capacity credit delegation\n * @param litNodeClient - Connected LitNodeClient instance\n * @param ethersWallet - Initialized Ethers wallet instance for signing transactions\n * @param capacityTokenId - ID of the capacity credit token to delegate\n * @param pkpEthAddress - Ethereum address of the PKP to delegate to\n * @returns Promise resolving to AuthSig for delegation\n * @throws Error if signature creation fails\n */\nexport async function createCapacityCreditDelegationAuthSig(\n    litNodeClient: LitNodeClient,\n    ethersWallet: ethers.Wallet,\n    capacityTokenId: string,\n    pkpEthAddress: string,\n): Promise<AuthSig> {\n    const { capacityDelegationAuthSig } = await litNodeClient.createCapacityDelegationAuthSig({\n        dAppOwnerWallet: ethersWallet,\n        capacityTokenId,\n        delegateeAddresses: [pkpEthAddress],\n        uses: \"2\",\n        expiration: new Date(Date.now() + 1000 * 60 * 10).toISOString(), // 10 minutes\n    });\n\n    return capacityDelegationAuthSig;\n}\n\n/**\n * Mints a new Programmable Key Pair (PKP) NFT\n * @param litContractClient - Connected LitContracts instance\n * @returns Promise resolving to PKP details including tokenId, publicKey, and ethAddress\n * @throws Error if minting fails\n */\nexport async function mintPKP(litContractClient: LitContracts): Promise<{\n    tokenId: string;\n    publicKey: string;\n    ethAddress: string;\n}> {\n    return (await litContractClient.pkpNftContractUtils.write.mint()).pkp;\n}\n\n/**\n * Obtains session signatures for PKP authentication and capabilities\n * @param litNodeClient - Connected LitNodeClient instance\n * @param pkpPublicKey - Public key of the PKP\n * @param pkpEthAddress - Ethereum address of the PKP\n * @param ethersWallet - Initialized Ethers wallet instance for signing transactions\n * @param capacityTokenId - ID of the capacity credit token\n * @returns Promise resolving to session signatures\n * @throws Error if signature generation fails\n */\nexport async function getPKPSessionSigs(\n    litNodeClient: LitNodeClient,\n    pkpPublicKey: string,\n    pkpEthAddress: string,\n    ethersWallet: ethers.Wallet,\n    capacityTokenId: string,\n): Promise<SessionSigsMap> {\n    return litNodeClient.getPkpSessionSigs({\n        pkpPublicKey,\n        capabilityAuthSigs: [\n            await createCapacityCreditDelegationAuthSig(litNodeClient, ethersWallet, capacityTokenId, pkpEthAddress),\n        ],\n        authMethods: [\n            await EthWalletProvider.authenticate({\n                signer: ethersWallet,\n                litNodeClient,\n                expiration: new Date(Date.now() + 1000 * 60 * 10).toISOString(), // 10 minutes\n            }),\n        ],\n        resourceAbilityRequests: [\n            {\n                resource: new LitPKPResource(\"*\"),\n                ability: LIT_ABILITY.PKPSigning,\n            },\n            {\n                resource: new LitActionResource(\"*\"),\n                ability: LIT_ABILITY.LitActionExecution,\n            },\n        ],\n        expiration: new Date(Date.now() + 1000 * 60 * 10).toISOString(), // 10 minutes\n    });\n}\n\n/**\n * Generates a new wrapped key for secure key management\n * @param litNodeClient - Connected LitNodeClient instance\n * @param pkpSessionSigs - Valid session signatures for the PKP\n * @param network - Target network ('evm' or 'solana')\n * @param memo - Optional memo to attach to the wrapped key\n * @returns Promise resolving to wrapped key generation result\n * @throws Error if key generation fails\n */\nexport async function generateWrappedKey(\n    litNodeClient: LitNodeClient,\n    pkpSessionSigs: SessionSigsMap,\n    network: \"evm\" | \"solana\",\n    memo?: string,\n): Promise<GeneratePrivateKeyResult> {\n    return generatePrivateKey({\n        litNodeClient,\n        pkpSessionSigs,\n        network,\n        memo: memo ?? \"This is a wrapped key generated by the Lit Goat Wallet Client\",\n    });\n}\n\n/**\n * Retrieves metadata for a wrapped key with Ethereum address\n * @param litNodeClient - Connected LitNodeClient instance\n * @param pkpSessionSigs - Valid session signatures for the PKP\n * @param wrappedKeyId - ID of the wrapped key to retrieve\n * @returns Promise resolving to wrapped key metadata with normalized Ethereum address\n * @throws Error if metadata retrieval fails\n */\nexport async function getWrappedKeyMetadata(\n    litNodeClient: LitNodeClient,\n    pkpSessionSigs: SessionSigsMap,\n    wrappedKeyId: string,\n): Promise<StoredKeyData & { wrappedKeyAddress: string }> {\n    const keyMetadata = await getEncryptedKey({\n        litNodeClient,\n        pkpSessionSigs,\n        id: wrappedKeyId,\n    });\n\n    return {\n        ...keyMetadata,\n        wrappedKeyAddress: ethers.utils.computeAddress(keyMetadata.publicKey),\n    };\n}\n"]}
+\ No newline at end of file
+diff --git a/dist/chunk-IZ6LKOMN.js b/dist/chunk-IZ6LKOMN.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..9e6576f2360151a010f445c68bab4bc804bdaaf2
+--- /dev/null
++++ b/dist/chunk-IZ6LKOMN.js
+@@ -0,0 +1,108 @@
++"use strict";Object.defineProperty(exports, "__esModule", {value: true});
++
++var _chunk7QVYU63Ejs = require('./chunk-7QVYU63E.js');
++
++// src/solana.ts
++var _wrappedkeys = require('@lit-protocol/wrapped-keys');
++var _web3js = require('@solana/web3.js');
++var _walletsolana = require('@goat-sdk/wallet-solana');
++var _viem = require('viem');
++var { signMessageWithEncryptedKey, signTransactionWithEncryptedKey } = _wrappedkeys.api;
++var LitSolanaWallet = class extends _walletsolana.SolanaWalletClient {
++  static {
++    _chunk7QVYU63Ejs.__name.call(void 0, this, "LitSolanaWallet");
++  }
++  
++  
++  
++  
++  constructor(options) {
++    super({
++      connection: options.connection
++    });
++    const { litNodeClient, pkpSessionSigs, wrappedKeyMetadata, chain } = options;
++    this.litNodeClient = litNodeClient;
++    this.pkpSessionSigs = pkpSessionSigs;
++    this.wrappedKeyMetadata = wrappedKeyMetadata;
++    this.chain = chain;
++  }
++  getAddress() {
++    return this.wrappedKeyMetadata.publicKey;
++  }
++  async signMessage(message) {
++    const signature = await signMessageWithEncryptedKey({
++      pkpSessionSigs: this.pkpSessionSigs,
++      network: "solana",
++      id: this.wrappedKeyMetadata.id,
++      messageToSign: message,
++      litNodeClient: this.litNodeClient
++    });
++    return {
++      signature
++    };
++  }
++  async sendTransaction({ instructions }) {
++    const latestBlockhash = await this.connection.getLatestBlockhash("confirmed");
++    const tx = new (0, _web3js.Transaction)();
++    tx.recentBlockhash = latestBlockhash.blockhash;
++    tx.feePayer = new (0, _web3js.PublicKey)(this.wrappedKeyMetadata.publicKey);
++    tx.add(...instructions);
++    const serializedTransaction = tx.serialize({
++      requireAllSignatures: false,
++      verifySignatures: false
++    }).toString("base64");
++    const litTransaction = {
++      serializedTransaction,
++      chain: this.chain
++    };
++    const signedTransaction = await signTransactionWithEncryptedKey({
++      litNodeClient: this.litNodeClient,
++      pkpSessionSigs: this.pkpSessionSigs,
++      network: "solana",
++      id: this.wrappedKeyMetadata.id,
++      unsignedTransaction: litTransaction,
++      broadcast: true
++    });
++    return {
++      hash: signedTransaction
++    };
++  }
++  async sendRawTransaction(transaction) {
++    const litTransaction = {
++      serializedTransaction: transaction,
++      chain: this.chain
++    };
++    const signedTransaction = await signTransactionWithEncryptedKey({
++      litNodeClient: this.litNodeClient,
++      pkpSessionSigs: this.pkpSessionSigs,
++      network: "solana",
++      id: this.wrappedKeyMetadata.id,
++      unsignedTransaction: litTransaction,
++      broadcast: true
++    });
++    return {
++      hash: signedTransaction
++    };
++  }
++  async balanceOf(address) {
++    const pubkey = new (0, _web3js.PublicKey)(address);
++    const balance = await this.connection.getBalance(pubkey);
++    return {
++      decimals: 9,
++      symbol: "SOL",
++      name: "Solana",
++      value: _viem.formatUnits.call(void 0, BigInt(balance), 9),
++      inBaseUnits: balance.toString()
++    };
++  }
++};
++function createSolanaWallet(options) {
++  return new LitSolanaWallet(options);
++}
++_chunk7QVYU63Ejs.__name.call(void 0, createSolanaWallet, "createSolanaWallet");
++
++
++
++
++exports.LitSolanaWallet = LitSolanaWallet; exports.createSolanaWallet = createSolanaWallet;
++//# sourceMappingURL=chunk-IZ6LKOMN.js.map
+\ No newline at end of file
+diff --git a/dist/chunk-IZ6LKOMN.js.map b/dist/chunk-IZ6LKOMN.js.map
+new file mode 100644
+index 0000000000000000000000000000000000000000..39ff072c43ab688ac638b5802ba3f5e9f88a66c3
+--- /dev/null
++++ b/dist/chunk-IZ6LKOMN.js.map
+@@ -0,0 +1 @@
++{"version":3,"sources":["/Users/evzhen/workspace/goat/typescript/packages/wallets/lit-protocol/dist/chunk-IZ6LKOMN.js","../src/solana.ts"],"names":["signMessageWithEncryptedKey","signTransactionWithEncryptedKey","api","LitSolanaWallet","SolanaWalletClient","litNodeClient","pkpSessionSigs","wrappedKeyMetadata","chain","constructor","options","connection","getAddress","publicKey","signMessage","message","signature","network","id","messageToSign","sendTransaction","instructions","latestBlockhash","getLatestBlockhash","tx","Transaction","recentBlockhash","blockhash","feePayer","PublicKey","add","serializedTransaction","serialize","requireAllSignatures","verifySignatures","toString","litTransaction","signedTransaction","unsignedTransaction","broadcast","hash","sendRawTransaction","transaction","balanceOf","address","pubkey","balance","getBalance","decimals","symbol","name","value","formatUnits","BigInt","inBaseUnits","createSolanaWallet"],"mappings":"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","file":"/Users/evzhen/workspace/goat/typescript/packages/wallets/lit-protocol/dist/chunk-IZ6LKOMN.js","sourcesContent":[null,"import { LitNodeClient } from \"@lit-protocol/lit-node-client\";\nimport type { SessionSigsMap } from \"@lit-protocol/types\";\nimport { StoredKeyData, api } from \"@lit-protocol/wrapped-keys\";\nimport { PublicKey, Transaction } from \"@solana/web3.js\";\n\nimport { type SolanaTransaction, SolanaWalletClient } from \"@goat-sdk/wallet-solana\";\nimport { formatUnits } from \"viem\";\nimport type { LitSolanaWalletOptions } from \"./types\";\n\nconst { signMessageWithEncryptedKey, signTransactionWithEncryptedKey } = api;\n\nexport class LitSolanaWallet extends SolanaWalletClient {\n    private litNodeClient: LitNodeClient;\n    private pkpSessionSigs: SessionSigsMap;\n    private wrappedKeyMetadata: StoredKeyData & { wrappedKeyAddress: string };\n    private chain: \"devnet\" | \"mainnet-beta\" | \"testnet\";\n\n    constructor(options: LitSolanaWalletOptions) {\n        super({ connection: options.connection });\n        const { litNodeClient, pkpSessionSigs, wrappedKeyMetadata, chain } = options;\n        this.litNodeClient = litNodeClient;\n        this.pkpSessionSigs = pkpSessionSigs;\n        this.wrappedKeyMetadata = wrappedKeyMetadata;\n        this.chain = chain;\n    }\n\n    getAddress(): string {\n        return this.wrappedKeyMetadata.publicKey;\n    }\n\n    async signMessage(message: string): Promise<{ signature: string }> {\n        const signature = await signMessageWithEncryptedKey({\n            pkpSessionSigs: this.pkpSessionSigs,\n            network: \"solana\",\n            id: this.wrappedKeyMetadata.id,\n            messageToSign: message,\n            litNodeClient: this.litNodeClient,\n        });\n\n        return { signature };\n    }\n\n    async sendTransaction({ instructions }: SolanaTransaction): Promise<{ hash: string }> {\n        const latestBlockhash = await this.connection.getLatestBlockhash(\"confirmed\");\n        const tx = new Transaction();\n        tx.recentBlockhash = latestBlockhash.blockhash;\n        tx.feePayer = new PublicKey(this.wrappedKeyMetadata.publicKey);\n        tx.add(...instructions);\n\n        const serializedTransaction = tx\n            .serialize({\n                requireAllSignatures: false,\n                verifySignatures: false,\n            })\n            .toString(\"base64\");\n\n        const litTransaction = {\n            serializedTransaction,\n            chain: this.chain,\n        };\n\n        const signedTransaction = await signTransactionWithEncryptedKey({\n            litNodeClient: this.litNodeClient,\n            pkpSessionSigs: this.pkpSessionSigs,\n            network: \"solana\",\n            id: this.wrappedKeyMetadata.id,\n            unsignedTransaction: litTransaction,\n            broadcast: true,\n        });\n\n        return {\n            hash: signedTransaction,\n        };\n    }\n\n    async sendRawTransaction(transaction: string): Promise<{ hash: string }> {\n        const litTransaction = {\n            serializedTransaction: transaction,\n            chain: this.chain,\n        };\n\n        const signedTransaction = await signTransactionWithEncryptedKey({\n            litNodeClient: this.litNodeClient,\n            pkpSessionSigs: this.pkpSessionSigs,\n            network: \"solana\",\n            id: this.wrappedKeyMetadata.id,\n            unsignedTransaction: litTransaction,\n            broadcast: true,\n        });\n\n        return {\n            hash: signedTransaction,\n        };\n    }\n\n    async balanceOf(address: string) {\n        const pubkey = new PublicKey(address);\n        const balance = await this.connection.getBalance(pubkey);\n\n        return {\n            decimals: 9,\n            symbol: \"SOL\",\n            name: \"Solana\",\n            value: formatUnits(BigInt(balance), 9),\n            inBaseUnits: balance.toString(),\n        };\n    }\n}\n\nexport function createSolanaWallet(options: LitSolanaWalletOptions) {\n    return new LitSolanaWallet(options);\n}\n"]}
+\ No newline at end of file
+diff --git a/dist/chunk-LQQF4JWF.mjs b/dist/chunk-LQQF4JWF.mjs
+deleted file mode 100644
+index 4581e7dde4d6b3d3b2565b51c4618c1b5c97c516..0000000000000000000000000000000000000000
+diff --git a/dist/chunk-SPE6OJYC.js b/dist/chunk-MASWBLX5.mjs
+similarity index 90%
+rename from dist/chunk-SPE6OJYC.js
+rename to dist/chunk-MASWBLX5.mjs
+index 7312ed85a8339113208901062f343de92d5a5422..29ed44ee0cf86aecc5ff4dce8439f571146ffa9d 100644
+--- a/dist/chunk-SPE6OJYC.js
++++ b/dist/chunk-MASWBLX5.mjs
+@@ -1,4 +1,5 @@
+-"use strict";Object.defineProperty(exports, "__esModule", {value: true});var t=`
++// src/litActions/evmWrappedKeySignEip712Message.ts
++var signEip712MessageLitActionCode = `
+ const LIT_PREFIX = "lit_";
+ 
+ async function getDecryptedKeyToSingleNode({
+@@ -61,4 +62,9 @@ async function signMessageEthereumKey({ privateKey, messageToSign }) {
+     Lit.Actions.setResponse({ response: \`Error: \${err.message}\` });
+   }
+ })();
+-`;exports.a = t;
++`;
++
++export {
++  signEip712MessageLitActionCode
++};
++//# sourceMappingURL=chunk-MASWBLX5.mjs.map
+\ No newline at end of file
+diff --git a/dist/chunk-MASWBLX5.mjs.map b/dist/chunk-MASWBLX5.mjs.map
+new file mode 100644
+index 0000000000000000000000000000000000000000..e258b7c3eb0861a1dc8189dfb9e37909205c42ee
+--- /dev/null
++++ b/dist/chunk-MASWBLX5.mjs.map
+@@ -0,0 +1 @@
++{"version":3,"sources":["../src/litActions/evmWrappedKeySignEip712Message.ts"],"sourcesContent":["/**\n * Signs a message with the Ethers wallet which is also decrypted inside the Lit Action.\n *\n * @jsParam pkpAddress - The Eth address of the PKP which is associated with the Wrapped Key\n * @jsParam ciphertext - For the encrypted Wrapped Key\n * @jsParam dataToEncryptHash - For the encrypted Wrapped Key\n * @jsParam messageToSign - The unsigned message to be signed by the Wrapped Key\n * @jsParam accessControlConditions - The access control condition that allows only the pkpAddress to decrypt the Wrapped Key\n *\n * @returns { Promise<string> } - Returns a message signed by the Ethers Wrapped key. Or returns errors if any.\n */\nexport const signEip712MessageLitActionCode = `\nconst LIT_PREFIX = \"lit_\";\n\nasync function getDecryptedKeyToSingleNode({\n  accessControlConditions,\n  ciphertext,\n  dataToEncryptHash,\n}) {\n  try {\n    // May be undefined, since we're using \\`decryptToSingleNode\\`\n    return await Lit.Actions.decryptToSingleNode({\n      accessControlConditions,\n      ciphertext,\n      dataToEncryptHash,\n      chain: \"ethereum\",\n      authSig: null,\n    });\n  } catch (err) {\n    throw new Error(\\`When decrypting key to a single node - \\${err.message}\\`);\n  }\n}\n\nfunction removeSaltFromDecryptedKey(decryptedPrivateKey) {\n  if (!decryptedPrivateKey.startsWith(LIT_PREFIX)) {\n    throw new Error(\n      \\`PKey was not encrypted with salt; all wrapped keys must be prefixed with '\\${LIT_PREFIX}'\\`\n    );\n  }\n\n  return decryptedPrivateKey.slice(LIT_PREFIX.length);\n}\n\nasync function signMessageEthereumKey({ privateKey, messageToSign }) {\n  const wallet = new ethers.Wallet(privateKey);\n  const { domain, types, message } = JSON.parse(messageToSign);\n  return wallet._signTypedData(domain, types, message);\n}\n\n(async () => {\n  try {\n    const decryptedPrivateKey = await getDecryptedKeyToSingleNode({\n      accessControlConditions,\n      ciphertext,\n      dataToEncryptHash,\n    });\n\n    if (!decryptedPrivateKey) {\n      // Silently exit on nodes which didn't run the \\`decryptToSingleNode\\` code\n      return;\n    }\n\n    const privateKey = removeSaltFromDecryptedKey(decryptedPrivateKey);\n\n    let signature = await signMessageEthereumKey({\n      privateKey,\n      messageToSign,\n    });\n\n    Lit.Actions.setResponse({ response: signature });\n  } catch (err) {\n    Lit.Actions.setResponse({ response: \\`Error: \\${err.message}\\` });\n  }\n})();\n`;\n"],"mappings":";AAWO,IAAMA,iCAAiC;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;","names":["signEip712MessageLitActionCode"]}
+\ No newline at end of file
+diff --git a/dist/chunk-NKSILAX2.mjs b/dist/chunk-NKSILAX2.mjs
+deleted file mode 100644
+index 91dbf8678b0c9da874e7f30282417086f990e0bb..0000000000000000000000000000000000000000
+diff --git a/dist/chunk-NOIUWM6U.mjs b/dist/chunk-NOIUWM6U.mjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..cb288b7ea35abb1c6b6fe49f3f8450fa136ad58e
+--- /dev/null
++++ b/dist/chunk-NOIUWM6U.mjs
+@@ -0,0 +1,120 @@
++import {
++  __name
++} from "./chunk-PAWJFY3S.mjs";
++
++// src/setup/index.ts
++import { LitActionResource, LitPKPResource } from "@lit-protocol/auth-helpers";
++import { LIT_ABILITY, LIT_RPC } from "@lit-protocol/constants";
++import { LitContracts } from "@lit-protocol/contracts-sdk";
++import { EthWalletProvider } from "@lit-protocol/lit-auth-client";
++import { LitNodeClient } from "@lit-protocol/lit-node-client";
++import { api } from "@lit-protocol/wrapped-keys";
++import { ethers } from "ethers";
++var { generatePrivateKey, getEncryptedKey } = api;
++async function createLitNodeClient(network, debug = false) {
++  const litNodeClient = new LitNodeClient({
++    litNetwork: network,
++    debug
++  });
++  await litNodeClient.connect();
++  return litNodeClient;
++}
++__name(createLitNodeClient, "createLitNodeClient");
++async function createLitContractsClient(ethersWallet, network) {
++  const litContractClient = new LitContracts({
++    signer: ethersWallet,
++    network
++  });
++  await litContractClient.connect();
++  return litContractClient;
++}
++__name(createLitContractsClient, "createLitContractsClient");
++function createEthersWallet(privateKey) {
++  return new ethers.Wallet(privateKey, new ethers.providers.JsonRpcProvider(LIT_RPC.CHRONICLE_YELLOWSTONE));
++}
++__name(createEthersWallet, "createEthersWallet");
++async function mintCapacityCredit(litContractClient, requestsPerSecond, daysUntilUTCMidnightExpiration) {
++  return litContractClient.mintCapacityCreditsNFT({
++    requestsPerSecond,
++    daysUntilUTCMidnightExpiration
++  });
++}
++__name(mintCapacityCredit, "mintCapacityCredit");
++async function createCapacityCreditDelegationAuthSig(litNodeClient, ethersWallet, capacityTokenId, pkpEthAddress) {
++  const { capacityDelegationAuthSig } = await litNodeClient.createCapacityDelegationAuthSig({
++    dAppOwnerWallet: ethersWallet,
++    capacityTokenId,
++    delegateeAddresses: [
++      pkpEthAddress
++    ],
++    uses: "2",
++    expiration: new Date(Date.now() + 1e3 * 60 * 10).toISOString()
++  });
++  return capacityDelegationAuthSig;
++}
++__name(createCapacityCreditDelegationAuthSig, "createCapacityCreditDelegationAuthSig");
++async function mintPKP(litContractClient) {
++  return (await litContractClient.pkpNftContractUtils.write.mint()).pkp;
++}
++__name(mintPKP, "mintPKP");
++async function getPKPSessionSigs(litNodeClient, pkpPublicKey, pkpEthAddress, ethersWallet, capacityTokenId) {
++  return litNodeClient.getPkpSessionSigs({
++    pkpPublicKey,
++    capabilityAuthSigs: [
++      await createCapacityCreditDelegationAuthSig(litNodeClient, ethersWallet, capacityTokenId, pkpEthAddress)
++    ],
++    authMethods: [
++      await EthWalletProvider.authenticate({
++        signer: ethersWallet,
++        litNodeClient,
++        expiration: new Date(Date.now() + 1e3 * 60 * 10).toISOString()
++      })
++    ],
++    resourceAbilityRequests: [
++      {
++        resource: new LitPKPResource("*"),
++        ability: LIT_ABILITY.PKPSigning
++      },
++      {
++        resource: new LitActionResource("*"),
++        ability: LIT_ABILITY.LitActionExecution
++      }
++    ],
++    expiration: new Date(Date.now() + 1e3 * 60 * 10).toISOString()
++  });
++}
++__name(getPKPSessionSigs, "getPKPSessionSigs");
++async function generateWrappedKey(litNodeClient, pkpSessionSigs, network, memo) {
++  return generatePrivateKey({
++    litNodeClient,
++    pkpSessionSigs,
++    network,
++    memo: memo ?? "This is a wrapped key generated by the Lit Goat Wallet Client"
++  });
++}
++__name(generateWrappedKey, "generateWrappedKey");
++async function getWrappedKeyMetadata(litNodeClient, pkpSessionSigs, wrappedKeyId) {
++  const keyMetadata = await getEncryptedKey({
++    litNodeClient,
++    pkpSessionSigs,
++    id: wrappedKeyId
++  });
++  return {
++    ...keyMetadata,
++    wrappedKeyAddress: ethers.utils.computeAddress(keyMetadata.publicKey)
++  };
++}
++__name(getWrappedKeyMetadata, "getWrappedKeyMetadata");
++
++export {
++  createLitNodeClient,
++  createLitContractsClient,
++  createEthersWallet,
++  mintCapacityCredit,
++  createCapacityCreditDelegationAuthSig,
++  mintPKP,
++  getPKPSessionSigs,
++  generateWrappedKey,
++  getWrappedKeyMetadata
++};
++//# sourceMappingURL=chunk-NOIUWM6U.mjs.map
+\ No newline at end of file
+diff --git a/dist/chunk-NOIUWM6U.mjs.map b/dist/chunk-NOIUWM6U.mjs.map
+new file mode 100644
+index 0000000000000000000000000000000000000000..73ef48660723763cb5a52a8c57027a72975d5029
+--- /dev/null
++++ b/dist/chunk-NOIUWM6U.mjs.map
+@@ -0,0 +1 @@
++{"version":3,"sources":["../src/setup/index.ts"],"sourcesContent":["import { LitActionResource, LitPKPResource } from \"@lit-protocol/auth-helpers\";\nimport { LIT_ABILITY, type LIT_NETWORK, LIT_RPC } from \"@lit-protocol/constants\";\nimport { LitContracts } from \"@lit-protocol/contracts-sdk\";\nimport { EthWalletProvider } from \"@lit-protocol/lit-auth-client\";\nimport { LitNodeClient } from \"@lit-protocol/lit-node-client\";\nimport type { AuthSig, MintCapacityCreditsRes, SessionSigsMap } from \"@lit-protocol/types\";\nimport { type GeneratePrivateKeyResult, type StoredKeyData, api } from \"@lit-protocol/wrapped-keys\";\nimport { ethers } from \"ethers\";\n\nconst { generatePrivateKey, getEncryptedKey } = api;\n\nexport type LIT_NETWORKS_KEYS = (typeof LIT_NETWORK)[keyof typeof LIT_NETWORK];\n\n/**\n * Creates and initializes a new Lit Protocol node client\n * @param network - The Lit Network to connect to (e.g., 'datil', 'datil-test', 'datil')\n * @param debug - Optional flag to enable debug logging (default: false)\n * @returns Promise resolving to a connected LitNodeClient instance\n * @throws Error if connection fails\n */\nexport async function createLitNodeClient(network: LIT_NETWORKS_KEYS, debug = false): Promise<LitNodeClient> {\n    const litNodeClient = new LitNodeClient({\n        litNetwork: network,\n        debug,\n    });\n    await litNodeClient.connect();\n    return litNodeClient;\n}\n\n/**\n * Creates and connects a Lit Contracts client for interacting with Lit Protocol smart contracts\n * @param ethersWallet - Initialized Ethers wallet instance for signing transactions\n * @param network - The Lit Network to connect to (e.g., 'datil', 'datil-test', 'datil')\n * @returns Promise resolving to a connected LitContracts instance\n * @throws Error if connection fails\n */\nexport async function createLitContractsClient(\n    ethersWallet: ethers.Wallet,\n    network: LIT_NETWORKS_KEYS,\n): Promise<LitContracts> {\n    const litContractClient = new LitContracts({\n        signer: ethersWallet,\n        network,\n    });\n    await litContractClient.connect();\n    return litContractClient;\n}\n\n/**\n * Creates an Ethers wallet instance configured for Lit Protocol\n * @param privateKey - Private key for the wallet (with 0x prefix)\n * @returns Configured Ethers wallet instance connected to Lit RPC\n */\nexport function createEthersWallet(privateKey: string): ethers.Wallet {\n    return new ethers.Wallet(privateKey, new ethers.providers.JsonRpcProvider(LIT_RPC.CHRONICLE_YELLOWSTONE));\n}\n\n/**\n * Mints a new capacity credit NFT for rate limiting\n * @param litContractClient - Connected LitContracts instance\n * @param requestsPerSecond - Number of requests per second allowed\n * @param daysUntilUTCMidnightExpiration - Number of days until the credit expires at UTC midnight (max is 30 days)\n * @returns Promise resolving to minting transaction result with capacity token details\n * @throws Error if minting fails\n */\nexport async function mintCapacityCredit(\n    litContractClient: LitContracts,\n    requestsPerSecond: number,\n    daysUntilUTCMidnightExpiration: number,\n): Promise<MintCapacityCreditsRes> {\n    return litContractClient.mintCapacityCreditsNFT({\n        requestsPerSecond: requestsPerSecond,\n        daysUntilUTCMidnightExpiration: daysUntilUTCMidnightExpiration,\n    });\n}\n\n/**\n * Creates an authentication signature for capacity credit delegation\n * @param litNodeClient - Connected LitNodeClient instance\n * @param ethersWallet - Initialized Ethers wallet instance for signing transactions\n * @param capacityTokenId - ID of the capacity credit token to delegate\n * @param pkpEthAddress - Ethereum address of the PKP to delegate to\n * @returns Promise resolving to AuthSig for delegation\n * @throws Error if signature creation fails\n */\nexport async function createCapacityCreditDelegationAuthSig(\n    litNodeClient: LitNodeClient,\n    ethersWallet: ethers.Wallet,\n    capacityTokenId: string,\n    pkpEthAddress: string,\n): Promise<AuthSig> {\n    const { capacityDelegationAuthSig } = await litNodeClient.createCapacityDelegationAuthSig({\n        dAppOwnerWallet: ethersWallet,\n        capacityTokenId,\n        delegateeAddresses: [pkpEthAddress],\n        uses: \"2\",\n        expiration: new Date(Date.now() + 1000 * 60 * 10).toISOString(), // 10 minutes\n    });\n\n    return capacityDelegationAuthSig;\n}\n\n/**\n * Mints a new Programmable Key Pair (PKP) NFT\n * @param litContractClient - Connected LitContracts instance\n * @returns Promise resolving to PKP details including tokenId, publicKey, and ethAddress\n * @throws Error if minting fails\n */\nexport async function mintPKP(litContractClient: LitContracts): Promise<{\n    tokenId: string;\n    publicKey: string;\n    ethAddress: string;\n}> {\n    return (await litContractClient.pkpNftContractUtils.write.mint()).pkp;\n}\n\n/**\n * Obtains session signatures for PKP authentication and capabilities\n * @param litNodeClient - Connected LitNodeClient instance\n * @param pkpPublicKey - Public key of the PKP\n * @param pkpEthAddress - Ethereum address of the PKP\n * @param ethersWallet - Initialized Ethers wallet instance for signing transactions\n * @param capacityTokenId - ID of the capacity credit token\n * @returns Promise resolving to session signatures\n * @throws Error if signature generation fails\n */\nexport async function getPKPSessionSigs(\n    litNodeClient: LitNodeClient,\n    pkpPublicKey: string,\n    pkpEthAddress: string,\n    ethersWallet: ethers.Wallet,\n    capacityTokenId: string,\n): Promise<SessionSigsMap> {\n    return litNodeClient.getPkpSessionSigs({\n        pkpPublicKey,\n        capabilityAuthSigs: [\n            await createCapacityCreditDelegationAuthSig(litNodeClient, ethersWallet, capacityTokenId, pkpEthAddress),\n        ],\n        authMethods: [\n            await EthWalletProvider.authenticate({\n                signer: ethersWallet,\n                litNodeClient,\n                expiration: new Date(Date.now() + 1000 * 60 * 10).toISOString(), // 10 minutes\n            }),\n        ],\n        resourceAbilityRequests: [\n            {\n                resource: new LitPKPResource(\"*\"),\n                ability: LIT_ABILITY.PKPSigning,\n            },\n            {\n                resource: new LitActionResource(\"*\"),\n                ability: LIT_ABILITY.LitActionExecution,\n            },\n        ],\n        expiration: new Date(Date.now() + 1000 * 60 * 10).toISOString(), // 10 minutes\n    });\n}\n\n/**\n * Generates a new wrapped key for secure key management\n * @param litNodeClient - Connected LitNodeClient instance\n * @param pkpSessionSigs - Valid session signatures for the PKP\n * @param network - Target network ('evm' or 'solana')\n * @param memo - Optional memo to attach to the wrapped key\n * @returns Promise resolving to wrapped key generation result\n * @throws Error if key generation fails\n */\nexport async function generateWrappedKey(\n    litNodeClient: LitNodeClient,\n    pkpSessionSigs: SessionSigsMap,\n    network: \"evm\" | \"solana\",\n    memo?: string,\n): Promise<GeneratePrivateKeyResult> {\n    return generatePrivateKey({\n        litNodeClient,\n        pkpSessionSigs,\n        network,\n        memo: memo ?? \"This is a wrapped key generated by the Lit Goat Wallet Client\",\n    });\n}\n\n/**\n * Retrieves metadata for a wrapped key with Ethereum address\n * @param litNodeClient - Connected LitNodeClient instance\n * @param pkpSessionSigs - Valid session signatures for the PKP\n * @param wrappedKeyId - ID of the wrapped key to retrieve\n * @returns Promise resolving to wrapped key metadata with normalized Ethereum address\n * @throws Error if metadata retrieval fails\n */\nexport async function getWrappedKeyMetadata(\n    litNodeClient: LitNodeClient,\n    pkpSessionSigs: SessionSigsMap,\n    wrappedKeyId: string,\n): Promise<StoredKeyData & { wrappedKeyAddress: string }> {\n    const keyMetadata = await getEncryptedKey({\n        litNodeClient,\n        pkpSessionSigs,\n        id: wrappedKeyId,\n    });\n\n    return {\n        ...keyMetadata,\n        wrappedKeyAddress: ethers.utils.computeAddress(keyMetadata.publicKey),\n    };\n}\n"],"mappings":";;;;;AAAA,SAASA,mBAAmBC,sBAAsB;AAClD,SAASC,aAA+BC,eAAe;AACvD,SAASC,oBAAoB;AAC7B,SAASC,yBAAyB;AAClC,SAASC,qBAAqB;AAE9B,SAA4DC,WAAW;AACvE,SAASC,cAAc;AAEvB,IAAM,EAAEC,oBAAoBC,gBAAe,IAAKC;AAWhD,eAAsBC,oBAAoBC,SAA4BC,QAAQ,OAAK;AAC/E,QAAMC,gBAAgB,IAAIC,cAAc;IACpCC,YAAYJ;IACZC;EACJ,CAAA;AACA,QAAMC,cAAcG,QAAO;AAC3B,SAAOH;AACX;AAPsBH;AAgBtB,eAAsBO,yBAClBC,cACAP,SAA0B;AAE1B,QAAMQ,oBAAoB,IAAIC,aAAa;IACvCC,QAAQH;IACRP;EACJ,CAAA;AACA,QAAMQ,kBAAkBH,QAAO;AAC/B,SAAOG;AACX;AAVsBF;AAiBf,SAASK,mBAAmBC,YAAkB;AACjD,SAAO,IAAIC,OAAOC,OAAOF,YAAY,IAAIC,OAAOE,UAAUC,gBAAgBC,QAAQC,qBAAqB,CAAA;AAC3G;AAFgBP;AAYhB,eAAsBQ,mBAClBX,mBACAY,mBACAC,gCAAsC;AAEtC,SAAOb,kBAAkBc,uBAAuB;IAC5CF;IACAC;EACJ,CAAA;AACJ;AATsBF;AAoBtB,eAAsBI,sCAClBrB,eACAK,cACAiB,iBACAC,eAAqB;AAErB,QAAM,EAAEC,0BAAyB,IAAK,MAAMxB,cAAcyB,gCAAgC;IACtFC,iBAAiBrB;IACjBiB;IACAK,oBAAoB;MAACJ;;IACrBK,MAAM;IACNC,YAAY,IAAIC,KAAKA,KAAKC,IAAG,IAAK,MAAO,KAAK,EAAA,EAAIC,YAAW;EACjE,CAAA;AAEA,SAAOR;AACX;AAfsBH;AAuBtB,eAAsBY,QAAQ3B,mBAA+B;AAKzD,UAAQ,MAAMA,kBAAkB4B,oBAAoBC,MAAMC,KAAI,GAAIC;AACtE;AANsBJ;AAkBtB,eAAsBK,kBAClBtC,eACAuC,cACAhB,eACAlB,cACAiB,iBAAuB;AAEvB,SAAOtB,cAAcwC,kBAAkB;IACnCD;IACAE,oBAAoB;MAChB,MAAMpB,sCAAsCrB,eAAeK,cAAciB,iBAAiBC,aAAAA;;IAE9FmB,aAAa;MACT,MAAMC,kBAAkBC,aAAa;QACjCpC,QAAQH;QACRL;QACA6B,YAAY,IAAIC,KAAKA,KAAKC,IAAG,IAAK,MAAO,KAAK,EAAA,EAAIC,YAAW;MACjE,CAAA;;IAEJa,yBAAyB;MACrB;QACIC,UAAU,IAAIC,eAAe,GAAA;QAC7BC,SAASC,YAAYC;MACzB;MACA;QACIJ,UAAU,IAAIK,kBAAkB,GAAA;QAChCH,SAASC,YAAYG;MACzB;;IAEJvB,YAAY,IAAIC,KAAKA,KAAKC,IAAG,IAAK,MAAO,KAAK,EAAA,EAAIC,YAAW;EACjE,CAAA;AACJ;AA/BsBM;AA0CtB,eAAsBe,mBAClBrD,eACAsD,gBACAxD,SACAyD,MAAa;AAEb,SAAO7D,mBAAmB;IACtBM;IACAsD;IACAxD;IACAyD,MAAMA,QAAQ;EAClB,CAAA;AACJ;AAZsBF;AAsBtB,eAAsBG,sBAClBxD,eACAsD,gBACAG,cAAoB;AAEpB,QAAMC,cAAc,MAAM/D,gBAAgB;IACtCK;IACAsD;IACAK,IAAIF;EACR,CAAA;AAEA,SAAO;IACH,GAAGC;IACHE,mBAAmBjD,OAAOkD,MAAMC,eAAeJ,YAAYK,SAAS;EACxE;AACJ;AAfsBP;","names":["LitActionResource","LitPKPResource","LIT_ABILITY","LIT_RPC","LitContracts","EthWalletProvider","LitNodeClient","api","ethers","generatePrivateKey","getEncryptedKey","api","createLitNodeClient","network","debug","litNodeClient","LitNodeClient","litNetwork","connect","createLitContractsClient","ethersWallet","litContractClient","LitContracts","signer","createEthersWallet","privateKey","ethers","Wallet","providers","JsonRpcProvider","LIT_RPC","CHRONICLE_YELLOWSTONE","mintCapacityCredit","requestsPerSecond","daysUntilUTCMidnightExpiration","mintCapacityCreditsNFT","createCapacityCreditDelegationAuthSig","capacityTokenId","pkpEthAddress","capacityDelegationAuthSig","createCapacityDelegationAuthSig","dAppOwnerWallet","delegateeAddresses","uses","expiration","Date","now","toISOString","mintPKP","pkpNftContractUtils","write","mint","pkp","getPKPSessionSigs","pkpPublicKey","getPkpSessionSigs","capabilityAuthSigs","authMethods","EthWalletProvider","authenticate","resourceAbilityRequests","resource","LitPKPResource","ability","LIT_ABILITY","PKPSigning","LitActionResource","LitActionExecution","generateWrappedKey","pkpSessionSigs","memo","getWrappedKeyMetadata","wrappedKeyId","keyMetadata","id","wrappedKeyAddress","utils","computeAddress","publicKey"]}
+\ No newline at end of file
+diff --git a/dist/chunk-PAWJFY3S.mjs b/dist/chunk-PAWJFY3S.mjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..f0aef519ab651cc1945e86237ec9e711ab22ee9c
+--- /dev/null
++++ b/dist/chunk-PAWJFY3S.mjs
+@@ -0,0 +1,7 @@
++var __defProp = Object.defineProperty;
++var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
++
++export {
++  __name
++};
++//# sourceMappingURL=chunk-PAWJFY3S.mjs.map
+\ No newline at end of file
+diff --git a/dist/chunk-PAWJFY3S.mjs.map b/dist/chunk-PAWJFY3S.mjs.map
+new file mode 100644
+index 0000000000000000000000000000000000000000..84c51b288c478ac0d18748007ccfb8cddc797f3a
+--- /dev/null
++++ b/dist/chunk-PAWJFY3S.mjs.map
+@@ -0,0 +1 @@
++{"version":3,"sources":[],"sourcesContent":[],"mappings":"","names":[]}
+\ No newline at end of file
+diff --git a/dist/chunk-PYELVRPK.mjs b/dist/chunk-PYELVRPK.mjs
+deleted file mode 100644
+index f7b815c6aba4f73c53c4d8f07e7a6bafb092430d..0000000000000000000000000000000000000000
+diff --git a/dist/chunk-SEKBEMEL.js b/dist/chunk-SEKBEMEL.js
+deleted file mode 100644
+index 63dd6f2dbcfb8e7c97923abc103935a30d0d9d58..0000000000000000000000000000000000000000
+diff --git a/dist/chunk-TBN7WKAH.js b/dist/chunk-TBN7WKAH.js
+deleted file mode 100644
+index 216198fca6868aea08e4414b196051f2c7a93ec3..0000000000000000000000000000000000000000
+diff --git a/dist/chunk-YSXGDEY5.mjs b/dist/chunk-YSXGDEY5.mjs
+deleted file mode 100644
+index 8909bacd56af98a1a3477ff2a9fc9737376992f6..0000000000000000000000000000000000000000
+diff --git a/dist/evm.js b/dist/evm.js
+index 316e76d0aa85f1a207bb19d214e1033c4cee649d..fbd27b03f76803f96ec8ffdd951d88716fbe23cc 100644
+--- a/dist/evm.js
++++ b/dist/evm.js
+@@ -1 +1,11 @@
+-"use strict";Object.defineProperty(exports, "__esModule", {value: true});var _chunkTBN7WKAHjs = require('./chunk-TBN7WKAH.js');require('./chunk-SPE6OJYC.js');require('./chunk-EI7MMDWY.js');exports.LitEVMWalletClient = _chunkTBN7WKAHjs.a; exports.createEVMWallet = _chunkTBN7WKAHjs.b;
++"use strict";Object.defineProperty(exports, "__esModule", {value: true});
++
++
++var _chunk2D4AW4B3js = require('./chunk-2D4AW4B3.js');
++require('./chunk-F4SFALW3.js');
++require('./chunk-7QVYU63E.js');
++
++
++
++exports.LitEVMWalletClient = _chunk2D4AW4B3js.LitEVMWalletClient; exports.createEVMWallet = _chunk2D4AW4B3js.createEVMWallet;
++//# sourceMappingURL=evm.js.map
+\ No newline at end of file
+diff --git a/dist/evm.js.map b/dist/evm.js.map
+new file mode 100644
+index 0000000000000000000000000000000000000000..e21095055c148822fcd6a02f1260f82723395b54
+--- /dev/null
++++ b/dist/evm.js.map
+@@ -0,0 +1 @@
++{"version":3,"sources":["/Users/evzhen/workspace/goat/typescript/packages/wallets/lit-protocol/dist/evm.js"],"names":[],"mappings":"AAAA;AACE;AACA;AACF,sDAA4B;AAC5B,+BAA4B;AAC5B,+BAA4B;AAC5B;AACE;AACA;AACF,6HAAC","file":"/Users/evzhen/workspace/goat/typescript/packages/wallets/lit-protocol/dist/evm.js"}
+\ No newline at end of file
+diff --git a/dist/evm.mjs b/dist/evm.mjs
+index 030fcc2b0e323810b1f7fa9b595dacced7e04711..c79155672339f2baf4a24e67be83ae033b5a74c2 100644
+--- a/dist/evm.mjs
++++ b/dist/evm.mjs
+@@ -1 +1,11 @@
+-import{a,b}from"./chunk-NKSILAX2.mjs";import"./chunk-Z2QG4O5M.mjs";import"./chunk-YSXGDEY5.mjs";export{a as LitEVMWalletClient,b as createEVMWallet};
++import {
++  LitEVMWalletClient,
++  createEVMWallet
++} from "./chunk-FVXLXUD6.mjs";
++import "./chunk-MASWBLX5.mjs";
++import "./chunk-PAWJFY3S.mjs";
++export {
++  LitEVMWalletClient,
++  createEVMWallet
++};
++//# sourceMappingURL=evm.mjs.map
+\ No newline at end of file
+diff --git a/dist/evm.mjs.map b/dist/evm.mjs.map
+new file mode 100644
+index 0000000000000000000000000000000000000000..84c51b288c478ac0d18748007ccfb8cddc797f3a
+--- /dev/null
++++ b/dist/evm.mjs.map
+@@ -0,0 +1 @@
++{"version":3,"sources":[],"sourcesContent":[],"mappings":"","names":[]}
+\ No newline at end of file
+diff --git a/dist/index.js b/dist/index.js
+index 3d4cc4bb59b70038f9436fe42b567f3aec43db5c..6e51d192456bdb7cf87ce9687e726a6e178d0e2e 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -1 +1,43 @@
+-"use strict";Object.defineProperty(exports, "__esModule", {value: true});var _chunkTBN7WKAHjs = require('./chunk-TBN7WKAH.js');var _chunk4YJQPFEMjs = require('./chunk-4YJQPFEM.js');require('./chunk-SPE6OJYC.js');var _chunkSEKBEMELjs = require('./chunk-SEKBEMEL.js');var _chunkEI7MMDWYjs = require('./chunk-EI7MMDWY.js');function v(r){return r.network==="evm"?_chunkTBN7WKAHjs.b.call(void 0, r):_chunk4YJQPFEMjs.b.call(void 0, r)}_chunkEI7MMDWYjs.a.call(void 0, v,"lit");exports.createCapacityCreditDelegationAuthSig = _chunkSEKBEMELjs.e; exports.createEthersWallet = _chunkSEKBEMELjs.c; exports.createLitContractsClient = _chunkSEKBEMELjs.b; exports.createLitNodeClient = _chunkSEKBEMELjs.a; exports.generateWrappedKey = _chunkSEKBEMELjs.h; exports.getPKPSessionSigs = _chunkSEKBEMELjs.g; exports.getWrappedKeyMetadata = _chunkSEKBEMELjs.i; exports.lit = v; exports.mintCapacityCredit = _chunkSEKBEMELjs.d; exports.mintPKP = _chunkSEKBEMELjs.f;
++"use strict";Object.defineProperty(exports, "__esModule", {value: true});
++
++var _chunk2D4AW4B3js = require('./chunk-2D4AW4B3.js');
++
++
++var _chunkIZ6LKOMNjs = require('./chunk-IZ6LKOMN.js');
++require('./chunk-F4SFALW3.js');
++
++
++
++
++
++
++
++
++
++
++var _chunkIOT65MS5js = require('./chunk-IOT65MS5.js');
++
++
++var _chunk7QVYU63Ejs = require('./chunk-7QVYU63E.js');
++
++// src/index.ts
++function lit(options) {
++  if (options.network === "evm") {
++    return _chunk2D4AW4B3js.createEVMWallet.call(void 0, options);
++  }
++  return _chunkIZ6LKOMNjs.createSolanaWallet.call(void 0, options);
++}
++_chunk7QVYU63Ejs.__name.call(void 0, lit, "lit");
++
++
++
++
++
++
++
++
++
++
++
++exports.createCapacityCreditDelegationAuthSig = _chunkIOT65MS5js.createCapacityCreditDelegationAuthSig; exports.createEthersWallet = _chunkIOT65MS5js.createEthersWallet; exports.createLitContractsClient = _chunkIOT65MS5js.createLitContractsClient; exports.createLitNodeClient = _chunkIOT65MS5js.createLitNodeClient; exports.generateWrappedKey = _chunkIOT65MS5js.generateWrappedKey; exports.getPKPSessionSigs = _chunkIOT65MS5js.getPKPSessionSigs; exports.getWrappedKeyMetadata = _chunkIOT65MS5js.getWrappedKeyMetadata; exports.lit = lit; exports.mintCapacityCredit = _chunkIOT65MS5js.mintCapacityCredit; exports.mintPKP = _chunkIOT65MS5js.mintPKP;
++//# sourceMappingURL=index.js.map
+\ No newline at end of file
+diff --git a/dist/index.js.map b/dist/index.js.map
+new file mode 100644
+index 0000000000000000000000000000000000000000..651d1ca4a69a9f1d0a6fcc1900029977b9ca25cb
+--- /dev/null
++++ b/dist/index.js.map
+@@ -0,0 +1 @@
++{"version":3,"sources":["/Users/evzhen/workspace/goat/typescript/packages/wallets/lit-protocol/dist/index.js","../src/index.ts"],"names":["lit","options","network","createEVMWallet","createSolanaWallet"],"mappings":"AAAA;AACE;AACF,sDAA4B;AAC5B;AACE;AACF,sDAA4B;AAC5B,+BAA4B;AAC5B;AACE;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACF,sDAA4B;AAC5B;AACE;AACF,sDAA4B;AAC5B;AACA;ACbO,SAASA,GAAAA,CAAIC,OAAAA,EAAqD;AACrE,EAAA,GAAA,CAAIA,OAAAA,CAAQC,QAAAA,IAAY,KAAA,EAAO;AAC3B,IAAA,OAAOC,8CAAAA,OAAgBF,CAAAA;ADe/B,ECdI;AAEA,EAAA,OAAOG,iDAAAA,OAAmBH,CAAAA;AAC9B;AANgBD,qCAAAA,GAAAA,EAAAA,KAAAA,CAAAA;ADqBhB;AACE;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACF,soBAAC","file":"/Users/evzhen/workspace/goat/typescript/packages/wallets/lit-protocol/dist/index.js","sourcesContent":[null,"import type { EVMWalletClient } from \"@goat-sdk/wallet-evm\";\nimport type { SolanaWalletClient } from \"@goat-sdk/wallet-solana\";\n\nimport { createEVMWallet } from \"./evm\";\nimport { createSolanaWallet } from \"./solana\";\nimport type { LitEVMWalletOptions, LitSolanaWalletOptions } from \"./types\";\n\nexport function lit(options: LitEVMWalletOptions): EVMWalletClient;\nexport function lit(options: LitSolanaWalletOptions): SolanaWalletClient;\nexport function lit(options: LitEVMWalletOptions | LitSolanaWalletOptions): EVMWalletClient | SolanaWalletClient {\n    if (options.network === \"evm\") {\n        return createEVMWallet(options);\n    }\n\n    return createSolanaWallet(options);\n}\n\nexport * from \"./setup\";\n"]}
+\ No newline at end of file
+diff --git a/dist/index.mjs b/dist/index.mjs
+index ba524082d8fbb46b9027f98300bc2130b4983002..9ae631f3acae192befc47a364a639d646077444a 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -1 +1,43 @@
+-import{b as t}from"./chunk-NKSILAX2.mjs";import{b as a}from"./chunk-PYELVRPK.mjs";import"./chunk-Z2QG4O5M.mjs";import{a as l,b as m,c as o,d as f,e as n,f as c,g as i,h as u,i as p}from"./chunk-LQQF4JWF.mjs";import{a as e}from"./chunk-YSXGDEY5.mjs";function w(r){return r.network==="evm"?t(r):a(r)}e(w,"lit");export{n as createCapacityCreditDelegationAuthSig,o as createEthersWallet,m as createLitContractsClient,l as createLitNodeClient,u as generateWrappedKey,i as getPKPSessionSigs,p as getWrappedKeyMetadata,w as lit,f as mintCapacityCredit,c as mintPKP};
++import {
++  createEVMWallet
++} from "./chunk-FVXLXUD6.mjs";
++import {
++  createSolanaWallet
++} from "./chunk-CGD4LFGX.mjs";
++import "./chunk-MASWBLX5.mjs";
++import {
++  createCapacityCreditDelegationAuthSig,
++  createEthersWallet,
++  createLitContractsClient,
++  createLitNodeClient,
++  generateWrappedKey,
++  getPKPSessionSigs,
++  getWrappedKeyMetadata,
++  mintCapacityCredit,
++  mintPKP
++} from "./chunk-NOIUWM6U.mjs";
++import {
++  __name
++} from "./chunk-PAWJFY3S.mjs";
++
++// src/index.ts
++function lit(options) {
++  if (options.network === "evm") {
++    return createEVMWallet(options);
++  }
++  return createSolanaWallet(options);
++}
++__name(lit, "lit");
++export {
++  createCapacityCreditDelegationAuthSig,
++  createEthersWallet,
++  createLitContractsClient,
++  createLitNodeClient,
++  generateWrappedKey,
++  getPKPSessionSigs,
++  getWrappedKeyMetadata,
++  lit,
++  mintCapacityCredit,
++  mintPKP
++};
++//# sourceMappingURL=index.mjs.map
+\ No newline at end of file
+diff --git a/dist/index.mjs.map b/dist/index.mjs.map
+new file mode 100644
+index 0000000000000000000000000000000000000000..3bb7bd43459e32f5b97674169837a85a383cbff1
+--- /dev/null
++++ b/dist/index.mjs.map
+@@ -0,0 +1 @@
++{"version":3,"sources":["../src/index.ts"],"sourcesContent":["import type { EVMWalletClient } from \"@goat-sdk/wallet-evm\";\nimport type { SolanaWalletClient } from \"@goat-sdk/wallet-solana\";\n\nimport { createEVMWallet } from \"./evm\";\nimport { createSolanaWallet } from \"./solana\";\nimport type { LitEVMWalletOptions, LitSolanaWalletOptions } from \"./types\";\n\nexport function lit(options: LitEVMWalletOptions): EVMWalletClient;\nexport function lit(options: LitSolanaWalletOptions): SolanaWalletClient;\nexport function lit(options: LitEVMWalletOptions | LitSolanaWalletOptions): EVMWalletClient | SolanaWalletClient {\n    if (options.network === \"evm\") {\n        return createEVMWallet(options);\n    }\n\n    return createSolanaWallet(options);\n}\n\nexport * from \"./setup\";\n"],"mappings":";;;;;;;;;;;;;;;;;;;;;;;AASO,SAASA,IAAIC,SAAqD;AACrE,MAAIA,QAAQC,YAAY,OAAO;AAC3B,WAAOC,gBAAgBF,OAAAA;EAC3B;AAEA,SAAOG,mBAAmBH,OAAAA;AAC9B;AANgBD;","names":["lit","options","network","createEVMWallet","createSolanaWallet"]}
+\ No newline at end of file
+diff --git a/dist/litActions/evmWrappedKeySignEip712Message.js b/dist/litActions/evmWrappedKeySignEip712Message.js
+index 6bdf875c564c5c219d1f8587658062cdd052c35d..300e55e3ed7f5f14708268cbc2535e6370992011 100644
+--- a/dist/litActions/evmWrappedKeySignEip712Message.js
++++ b/dist/litActions/evmWrappedKeySignEip712Message.js
+@@ -1 +1,8 @@
+-"use strict";Object.defineProperty(exports, "__esModule", {value: true});var _chunkSPE6OJYCjs = require('../chunk-SPE6OJYC.js');require('../chunk-EI7MMDWY.js');exports.signEip712MessageLitActionCode = _chunkSPE6OJYCjs.a;
++"use strict";Object.defineProperty(exports, "__esModule", {value: true});
++
++var _chunkF4SFALW3js = require('../chunk-F4SFALW3.js');
++require('../chunk-7QVYU63E.js');
++
++
++exports.signEip712MessageLitActionCode = _chunkF4SFALW3js.signEip712MessageLitActionCode;
++//# sourceMappingURL=evmWrappedKeySignEip712Message.js.map
+\ No newline at end of file
+diff --git a/dist/litActions/evmWrappedKeySignEip712Message.js.map b/dist/litActions/evmWrappedKeySignEip712Message.js.map
+new file mode 100644
+index 0000000000000000000000000000000000000000..93a2132a0180f0b95f2556690b296244d4a9bca7
+--- /dev/null
++++ b/dist/litActions/evmWrappedKeySignEip712Message.js.map
+@@ -0,0 +1 @@
++{"version":3,"sources":["/Users/evzhen/workspace/goat/typescript/packages/wallets/lit-protocol/dist/litActions/evmWrappedKeySignEip712Message.js"],"names":[],"mappings":"AAAA;AACE;AACF,uDAA6B;AAC7B,gCAA6B;AAC7B;AACE;AACF,yFAAC","file":"/Users/evzhen/workspace/goat/typescript/packages/wallets/lit-protocol/dist/litActions/evmWrappedKeySignEip712Message.js"}
+\ No newline at end of file
+diff --git a/dist/litActions/evmWrappedKeySignEip712Message.mjs b/dist/litActions/evmWrappedKeySignEip712Message.mjs
+index 85b6835dc0d0d4b225e6fd8546460310cc952538..4a4cf6cbbaf2f0c5a0c15a366bdfd4209b48ffb2 100644
+--- a/dist/litActions/evmWrappedKeySignEip712Message.mjs
++++ b/dist/litActions/evmWrappedKeySignEip712Message.mjs
+@@ -1 +1,8 @@
+-import{a}from"../chunk-Z2QG4O5M.mjs";import"../chunk-YSXGDEY5.mjs";export{a as signEip712MessageLitActionCode};
++import {
++  signEip712MessageLitActionCode
++} from "../chunk-MASWBLX5.mjs";
++import "../chunk-PAWJFY3S.mjs";
++export {
++  signEip712MessageLitActionCode
++};
++//# sourceMappingURL=evmWrappedKeySignEip712Message.mjs.map
+\ No newline at end of file
+diff --git a/dist/litActions/evmWrappedKeySignEip712Message.mjs.map b/dist/litActions/evmWrappedKeySignEip712Message.mjs.map
+new file mode 100644
+index 0000000000000000000000000000000000000000..84c51b288c478ac0d18748007ccfb8cddc797f3a
+--- /dev/null
++++ b/dist/litActions/evmWrappedKeySignEip712Message.mjs.map
+@@ -0,0 +1 @@
++{"version":3,"sources":[],"sourcesContent":[],"mappings":"","names":[]}
+\ No newline at end of file
+diff --git a/dist/setup/index.js b/dist/setup/index.js
+index 340f9482713a8950a003e5ed64c456c291759d0d..8b687e90362a02a6187cdc7f13552485fb485663 100644
+--- a/dist/setup/index.js
++++ b/dist/setup/index.js
+@@ -1 +1,24 @@
+-"use strict";Object.defineProperty(exports, "__esModule", {value: true});var _chunkSEKBEMELjs = require('../chunk-SEKBEMEL.js');require('../chunk-EI7MMDWY.js');exports.createCapacityCreditDelegationAuthSig = _chunkSEKBEMELjs.e; exports.createEthersWallet = _chunkSEKBEMELjs.c; exports.createLitContractsClient = _chunkSEKBEMELjs.b; exports.createLitNodeClient = _chunkSEKBEMELjs.a; exports.generateWrappedKey = _chunkSEKBEMELjs.h; exports.getPKPSessionSigs = _chunkSEKBEMELjs.g; exports.getWrappedKeyMetadata = _chunkSEKBEMELjs.i; exports.mintCapacityCredit = _chunkSEKBEMELjs.d; exports.mintPKP = _chunkSEKBEMELjs.f;
++"use strict";Object.defineProperty(exports, "__esModule", {value: true});
++
++
++
++
++
++
++
++
++
++var _chunkIOT65MS5js = require('../chunk-IOT65MS5.js');
++require('../chunk-7QVYU63E.js');
++
++
++
++
++
++
++
++
++
++
++exports.createCapacityCreditDelegationAuthSig = _chunkIOT65MS5js.createCapacityCreditDelegationAuthSig; exports.createEthersWallet = _chunkIOT65MS5js.createEthersWallet; exports.createLitContractsClient = _chunkIOT65MS5js.createLitContractsClient; exports.createLitNodeClient = _chunkIOT65MS5js.createLitNodeClient; exports.generateWrappedKey = _chunkIOT65MS5js.generateWrappedKey; exports.getPKPSessionSigs = _chunkIOT65MS5js.getPKPSessionSigs; exports.getWrappedKeyMetadata = _chunkIOT65MS5js.getWrappedKeyMetadata; exports.mintCapacityCredit = _chunkIOT65MS5js.mintCapacityCredit; exports.mintPKP = _chunkIOT65MS5js.mintPKP;
++//# sourceMappingURL=index.js.map
+\ No newline at end of file
+diff --git a/dist/setup/index.js.map b/dist/setup/index.js.map
+new file mode 100644
+index 0000000000000000000000000000000000000000..3886c08271a6de765c76eec80d8e6bd07541e8ff
+--- /dev/null
++++ b/dist/setup/index.js.map
+@@ -0,0 +1 @@
++{"version":3,"sources":["/Users/evzhen/workspace/goat/typescript/packages/wallets/lit-protocol/dist/setup/index.js"],"names":[],"mappings":"AAAA;AACE;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACF,uDAA6B;AAC7B,gCAA6B;AAC7B;AACE;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACA;AACF,mnBAAC","file":"/Users/evzhen/workspace/goat/typescript/packages/wallets/lit-protocol/dist/setup/index.js"}
+\ No newline at end of file
+diff --git a/dist/setup/index.mjs b/dist/setup/index.mjs
+index d306d4a39ad546d4d5465ce78ec3b32881ccf04a..ad26247c7977f3b6ad40e9a88d087d8e4f87a570 100644
+--- a/dist/setup/index.mjs
++++ b/dist/setup/index.mjs
+@@ -1 +1,24 @@
+-import{a,b,c,d,e,f,g,h,i}from"../chunk-LQQF4JWF.mjs";import"../chunk-YSXGDEY5.mjs";export{e as createCapacityCreditDelegationAuthSig,c as createEthersWallet,b as createLitContractsClient,a as createLitNodeClient,h as generateWrappedKey,g as getPKPSessionSigs,i as getWrappedKeyMetadata,d as mintCapacityCredit,f as mintPKP};
++import {
++  createCapacityCreditDelegationAuthSig,
++  createEthersWallet,
++  createLitContractsClient,
++  createLitNodeClient,
++  generateWrappedKey,
++  getPKPSessionSigs,
++  getWrappedKeyMetadata,
++  mintCapacityCredit,
++  mintPKP
++} from "../chunk-NOIUWM6U.mjs";
++import "../chunk-PAWJFY3S.mjs";
++export {
++  createCapacityCreditDelegationAuthSig,
++  createEthersWallet,
++  createLitContractsClient,
++  createLitNodeClient,
++  generateWrappedKey,
++  getPKPSessionSigs,
++  getWrappedKeyMetadata,
++  mintCapacityCredit,
++  mintPKP
++};
++//# sourceMappingURL=index.mjs.map
+\ No newline at end of file
+diff --git a/dist/setup/index.mjs.map b/dist/setup/index.mjs.map
+new file mode 100644
+index 0000000000000000000000000000000000000000..84c51b288c478ac0d18748007ccfb8cddc797f3a
+--- /dev/null
++++ b/dist/setup/index.mjs.map
+@@ -0,0 +1 @@
++{"version":3,"sources":[],"sourcesContent":[],"mappings":"","names":[]}
+\ No newline at end of file
+diff --git a/dist/solana.js b/dist/solana.js
+index 389f54b7dc0b40fe0ca1a44af15bf0b0531f7fad..ec3531d07d0309243ce654f8354acb1669a0747c 100644
+--- a/dist/solana.js
++++ b/dist/solana.js
+@@ -1 +1,10 @@
+-"use strict";Object.defineProperty(exports, "__esModule", {value: true});var _chunk4YJQPFEMjs = require('./chunk-4YJQPFEM.js');require('./chunk-EI7MMDWY.js');exports.LitSolanaWallet = _chunk4YJQPFEMjs.a; exports.createSolanaWallet = _chunk4YJQPFEMjs.b;
++"use strict";Object.defineProperty(exports, "__esModule", {value: true});
++
++
++var _chunkIZ6LKOMNjs = require('./chunk-IZ6LKOMN.js');
++require('./chunk-7QVYU63E.js');
++
++
++
++exports.LitSolanaWallet = _chunkIZ6LKOMNjs.LitSolanaWallet; exports.createSolanaWallet = _chunkIZ6LKOMNjs.createSolanaWallet;
++//# sourceMappingURL=solana.js.map
+\ No newline at end of file
+diff --git a/dist/solana.js.map b/dist/solana.js.map
+new file mode 100644
+index 0000000000000000000000000000000000000000..6e57f9b8852794d093cd7e2923e9de508f167d26
+--- /dev/null
++++ b/dist/solana.js.map
+@@ -0,0 +1 @@
++{"version":3,"sources":["/Users/evzhen/workspace/goat/typescript/packages/wallets/lit-protocol/dist/solana.js"],"names":[],"mappings":"AAAA;AACE;AACA;AACF,sDAA4B;AAC5B,+BAA4B;AAC5B;AACE;AACA;AACF,6HAAC","file":"/Users/evzhen/workspace/goat/typescript/packages/wallets/lit-protocol/dist/solana.js"}
+\ No newline at end of file
+diff --git a/dist/solana.mjs b/dist/solana.mjs
+index fa6dc28a375fe1bbaaa91fa093ce7a911578a7f3..0bb4f24168a3b40048e5236364b8c9080d4fa4a3 100644
+--- a/dist/solana.mjs
++++ b/dist/solana.mjs
+@@ -1 +1,10 @@
+-import{a,b}from"./chunk-PYELVRPK.mjs";import"./chunk-YSXGDEY5.mjs";export{a as LitSolanaWallet,b as createSolanaWallet};
++import {
++  LitSolanaWallet,
++  createSolanaWallet
++} from "./chunk-CGD4LFGX.mjs";
++import "./chunk-PAWJFY3S.mjs";
++export {
++  LitSolanaWallet,
++  createSolanaWallet
++};
++//# sourceMappingURL=solana.mjs.map
+\ No newline at end of file
+diff --git a/dist/solana.mjs.map b/dist/solana.mjs.map
+new file mode 100644
+index 0000000000000000000000000000000000000000..84c51b288c478ac0d18748007ccfb8cddc797f3a
+--- /dev/null
++++ b/dist/solana.mjs.map
+@@ -0,0 +1 @@
++{"version":3,"sources":[],"sourcesContent":[],"mappings":"","names":[]}
+\ No newline at end of file
+diff --git a/dist/types.js b/dist/types.js
+index 9a390c31f71bc7eae1522a280a2dc8f6723185bf..83d39ee76560a14529c1c77eb7d2c43b5b5c3c49 100644
+--- a/dist/types.js
++++ b/dist/types.js
+@@ -1 +1 @@
+-"use strict";
+\ No newline at end of file
++"use strict";//# sourceMappingURL=types.js.map
+\ No newline at end of file
+diff --git a/dist/types.js.map b/dist/types.js.map
+new file mode 100644
+index 0000000000000000000000000000000000000000..2e057b82c5f022c679f1a9a419f22bf2b81e8982
+--- /dev/null
++++ b/dist/types.js.map
+@@ -0,0 +1 @@
++{"version":3,"sources":["/Users/evzhen/workspace/goat/typescript/packages/wallets/lit-protocol/dist/types.js"],"names":[],"mappings":"AAAA","file":"/Users/evzhen/workspace/goat/typescript/packages/wallets/lit-protocol/dist/types.js"}
+\ No newline at end of file
+diff --git a/dist/types.mjs b/dist/types.mjs
+index e69de29bb2d1d6434b8b29ae775ad8c2e48c5391..c3d4162808fa4f893fe6af466970b61925c47019 100644
+--- a/dist/types.mjs
++++ b/dist/types.mjs
+@@ -0,0 +1 @@
++//# sourceMappingURL=types.mjs.map
+\ No newline at end of file
+diff --git a/dist/types.mjs.map b/dist/types.mjs.map
+new file mode 100644
+index 0000000000000000000000000000000000000000..84c51b288c478ac0d18748007ccfb8cddc797f3a
+--- /dev/null
++++ b/dist/types.mjs.map
+@@ -0,0 +1 @@
++{"version":3,"sources":[],"sourcesContent":[],"mappings":"","names":[]}
