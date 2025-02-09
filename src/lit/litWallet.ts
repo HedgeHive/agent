@@ -38,7 +38,6 @@ export const getLitWallet = async (): Promise<WalletClientBase> => {
   const pkps = await delegatee.getDelegatedPkps();
   let pkp;
   if (pkps.length === 0) {
-    console.log("No PKP delegated. Minting PKP");
     pkp = await mintPKP(litContractsClient);
     await delegatee.setCredentials({
       pkp
@@ -47,7 +46,6 @@ export const getLitWallet = async (): Promise<WalletClientBase> => {
     pkp = pkps[0];
   }
 
-  console.log("PKP: ", pkp);
 
   // Get session signatures
   const pkpSessionSigs = await getPKPSessionSigs(
@@ -57,13 +55,10 @@ export const getLitWallet = async (): Promise<WalletClientBase> => {
     ethersWallet,
     capacityCredit.capacityTokenId
   );
-  console.log("PKP session signatures: ", pkpSessionSigs);
 
   // Generate wrapped key and get metadata
   const wrappedKey = await generateWrappedKey(litNodeClient, pkpSessionSigs, "evm");
-  console.log("Wrapped key generated: ", wrappedKey);
   const wrappedKeyMetadata = await getWrappedKeyMetadata(litNodeClient, pkpSessionSigs, wrappedKey.id);
-  console.log("Wrapped key metadata: ", wrappedKeyMetadata);
   // Create viem wallet client
   const viemWalletClient = createWalletClient({
     transport: http(process.env.RPC_URL),
