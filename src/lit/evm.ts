@@ -5,6 +5,7 @@ import { formatEther, formatUnits, isAddress, publicActions } from "viem";
 import { mainnet } from "viem/chains";
 import { normalize } from "viem/ens";
 import { signEip712MessageLitActionCode } from "./litActions/evmWrappedKeySignEip712Message";
+import { sendTransactionLitActionCode } from "./litActions/evmWrappedKeySendTranscation";
 import type { LitEVMWalletOptions } from "./types";
 
 import { type EvmChain, type Signature } from "@goat-sdk/core";
@@ -127,6 +128,25 @@ export class LitEVMWalletClient extends EVMWalletClient {
         const { to, abi, functionName, args, value, options, data } = transaction;
         console.log("Sending transaction", transaction);
         const toAddress = await this.resolveAddress(to);
+
+        if (abi && functionName) {
+          const response = await this.litNodeClient.executeJs({
+              sessionSigs: this.pkpSessionSigs,
+              code: sendTransactionLitActionCode,
+              jsParams: {
+                  accessControlConditions: [this.getPkpAccessControlCondition(this.wrappedKeyMetadata.pkpAddress)],
+                  ciphertext: this.wrappedKeyMetadata.ciphertext,
+                  dataToEncryptHash: this.wrappedKeyMetadata.dataToEncryptHash,
+                  contractAddress: toAddress,
+                  abi: JSON.stringify(abi),
+                  functionName,
+                  args: JSON.stringify(args),
+                  value: value ? formatEther(value) : "0",
+              },
+          });
+  
+          return this.waitForReceipt(response.response as `0x${string}`);
+      }
 
         // Simple ETH transfer (no ABI)
         if (!abi) {
