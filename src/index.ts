@@ -13,12 +13,6 @@ import net from "net";
 import path from "path";
 import { fileURLToPath } from "url";
 
-import { viem } from "@goat-sdk/wallet-viem";
-
-import { createWalletClient, http } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
-import { arbitrum } from "viem/chains";
-
 import { initializeDbCache } from "./cache/index.ts";
 import { character } from "./character.ts";
 import { startChat } from "./chat/index.ts";
@@ -32,6 +26,8 @@ import { initializeDatabase } from "./database/index.ts";
 import { derivativesPlugin } from './plugins/plugin-derivatives/index.ts'
 import { getOnChainActions } from "./goat/adapters/eliza.ts";
 import { opium } from "./goat/plugins/opium/index.ts"
+import { getLitWallet } from "./lit/litWallet.ts";
+import { EVMWalletClient } from "@goat-sdk/wallet-evm";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -54,25 +50,15 @@ export async function createAgent(
     character.name,
   );
 
-  const account = privateKeyToAccount(
-    process.env.WALLET_PRIVATE_KEY as `0x${string}`
-  );
-
-  const walletClient = createWalletClient({
-    account: account,
-    transport: http(process.env.RPC_URL),
-    chain: arbitrum,
-  });
-
-  const goatWalletClient = viem(walletClient)
+  const litWalletClient = await getLitWallet();
 
   const goatActions = await getOnChainActions({
-    wallet: goatWalletClient,
+    wallet: litWalletClient,
     plugins: [
       opium({
         arbitrageur: {
           enabled: true,
-          wallet: goatWalletClient
+          wallet: litWalletClient as EVMWalletClient,
         }
       })
     ]
